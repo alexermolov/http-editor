@@ -3,7 +3,7 @@
 A VS Code extension for working with `.http` files featuring a Postman-like interface.
 
 <p align="center">
-  <img src="anim.gif" alt="HTTP Request Editor Animation" width="320" />
+  <img src="anim.gif" alt="HTTP Request Editor Animation" width="80%" />
 </p>
 
 ## Features
