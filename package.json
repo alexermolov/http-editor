@@ -1,0 +1,90 @@
+{
+  "name": "http-editor",
+  "displayName": "HTTP Request Editor",
+  "description": "Advanced HTTP request editor with Postman-like interface for .http files",
+  "version": "1.1.0",
+  "publisher": "alexermolov",
+  "author": {
+    "name": "Alex Ermolov"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexermolov/http-editor"
+  },
+  "bugs": {
+    "url": "https://github.com/alexermolov/http-editor/issues"
+  },
+  "homepage": "https://github.com/alexermolov/http-editor#readme",
+  "keywords": [
+    "http",
+    "rest",
+    "api",
+    "request",
+    "postman",
+    "curl",
+    "testing",
+    "http-client"
+  ],
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#0066B8",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.106.0"
+  },
+  "categories": [
+    "Testing",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:*.http"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "httpEditor.openEditor",
+        "title": "Open with HTTP Editor"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "resourceExtname == '.http'",
+          "command": "httpEditor.openEditor",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "when": "resourceExtname == '.http'",
+          "command": "httpEditor.openEditor",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "generate:icon": "node scripts/generate-icon.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "highlight.js": "^11.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "@types/vscode": "^1.106.1",
+    "@vscode/vsce": "^3.2.1",
+    "typescript": "^5.9.3",
+    "pureimage": "^0.3.17"
+  }
+}

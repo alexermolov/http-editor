@@ -1,0 +1,39 @@
+# VS Code files
+.vscode/**
+.vscode-test/**
+
+# Build files
+src/**
+tsconfig.json
+**/*.map
+
+# Test files
+test/**
+test.http
+
+# Development files
+.gitignore
+.yarnrc
+vsc-extension-quickstart.md
+**/jsconfig.json
+**/.eslintrc.json
+
+# Documentation (keep README, CHANGELOG, LICENSE)
+ARCHITECTURE.md
+TESTING.md
+
+# Scripts
+scripts/**
+
+# Node modules - only exclude dev dependencies
+node_modules/**/test/**
+node_modules/**/tests/**
+node_modules/**/*.md
+node_modules/**/.git*
+node_modules/**/LICENSE*
+node_modules/**/*.ts
+!node_modules/**/*.d.ts
+
+# Git
+.git/**
+.github/**
