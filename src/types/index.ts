@@ -8,6 +8,14 @@ export interface QueryParam {
 }
 
 /**
+ * Interface for variable
+ */
+export interface Variable {
+    name: string;
+    value: string;
+}
+
+/**
  * Interface for HTTP request
  */
 export interface HttpRequest {
@@ -19,6 +27,7 @@ export interface HttpRequest {
     queryParams?: QueryParam[];
     body: string;
     bodyType?: BodyType;
+    variables?: Record<string, string>;
 }
 
 /**

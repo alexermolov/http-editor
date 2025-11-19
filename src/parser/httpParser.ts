@@ -10,34 +10,69 @@ export class HttpFileParser {
     public parse(content: string): HttpRequest[] {
         const requests: HttpRequest[] = [];
         const lines = content.split('\n');
+        const globalVariables: Record<string, string> = {};
         let currentRequest: Partial<HttpRequest> | null = null;
         let inBody = false;
         let bodyLines: string[] = [];
+        let pendingComments: string[] = [];
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
 
-            // Разделитель запросов
-            if (line.startsWith('###')) {
-                // Сохраняем предыдущий запрос
-                if (currentRequest) {
-                    if (bodyLines.length > 0) {
-                        currentRequest.body = bodyLines.join('\n');
-                    }
-                    requests.push(this.finalizeRequest(currentRequest));
-                }
+            // Пропускаем пустые строки, если нет текущего запроса
+            if (!line && !currentRequest) {
+                continue;
+            }
 
-                // Начинаем новый запрос
-                currentRequest = {
-                    id: Date.now() + Math.random(),
-                    name: line.substring(3).trim() || `Request ${requests.length + 1}`,
-                    method: 'GET',
-                    url: '',
-                    headers: {},
-                    body: ''
-                };
-                inBody = false;
-                bodyLines = [];
+            // Парсим переменные (формат: @name = value)
+            if (line.startsWith('@') && line.includes('=')) {
+                const { name, value } = this.parseVariable(line);
+                if (name && value !== undefined) {
+                    globalVariables[name] = value;
+                }
+                continue;
+            }
+
+            // Парсим комментарии (строки начинающиеся с #)
+            if (line.startsWith('#')) {
+                // Извлекаем текст комментария, убирая все # в начале
+                const commentText = line.replace(/^#+\s*/, '').trim();
+                
+                if (line.startsWith('###')) {
+                    // Разделитель запросов
+                    // Сохраняем предыдущий запрос, если он валидный
+                    if (currentRequest && currentRequest.url) {
+                        if (bodyLines.length > 0) {
+                            currentRequest.body = bodyLines.join('\n');
+                        }
+                        requests.push(this.finalizeRequest(currentRequest, globalVariables));
+                    }
+
+                    // Начинаем новый запрос
+                    currentRequest = {
+                        id: Date.now() + Math.random(),
+                        name: commentText || (pendingComments.length > 0 ? pendingComments.join(' ') : `Request ${requests.length + 1}`),
+                        method: 'GET',
+                        url: '',
+                        headers: {},
+                        body: '',
+                        variables: {}
+                    };
+                    inBody = false;
+                    bodyLines = [];
+                    pendingComments = [];
+                } else {
+                    // Обычный комментарий (# или ##)
+                    if (currentRequest) {
+                        // Комментарий внутри запроса - игнорируем
+                        continue;
+                    } else {
+                        // Комментарий перед запросом - сохраняем
+                        if (commentText) {
+                            pendingComments.push(commentText);
+                        }
+                    }
+                }
                 continue;
             }
 
@@ -54,7 +89,7 @@ export class HttpFileParser {
             }
 
             // Headers
-            if (line.includes(':') && !inBody) {
+            if (line.includes(':') && !inBody && !line.startsWith('//') && !line.startsWith('#')) {
                 const { key, value } = this.parseHeaderLine(line);
                 if (key && value) {
                     currentRequest.headers = currentRequest.headers || {};
@@ -75,14 +110,14 @@ export class HttpFileParser {
             }
         }
 
-        // Save last request
-        if (currentRequest) {
+        // Save last request, если он валидный
+        if (currentRequest && currentRequest.url) {
             if (bodyLines.length > 0) {
                 currentRequest.body = bodyLines.join('\n');
             }
             // Detect body type
             currentRequest.bodyType = this.detectBodyType(currentRequest);
-            requests.push(this.finalizeRequest(currentRequest));
+            requests.push(this.finalizeRequest(currentRequest, globalVariables));
         }
 
         // If no requests, create empty one
@@ -152,9 +187,19 @@ export class HttpFileParser {
     }
 
     /**
+     * Parses variable definition line
+     */
+    private parseVariable(line: string): { name: string; value: string } {
+        const equalIndex = line.indexOf('=');
+        const name = line.substring(1, equalIndex).trim(); // Remove @ prefix
+        const value = line.substring(equalIndex + 1).trim();
+        return { name, value };
+    }
+
+    /**
      * Finalizes request creation, filling missing fields
      */
-    private finalizeRequest(request: Partial<HttpRequest>): HttpRequest {
+    private finalizeRequest(request: Partial<HttpRequest>, globalVariables: Record<string, string>): HttpRequest {
         return {
             id: request.id || Date.now(),
             name: request.name || 'Unnamed Request',
@@ -162,7 +207,8 @@ export class HttpFileParser {
             url: request.url || '',
             headers: request.headers || {},
             body: request.body || '',
-            bodyType: request.bodyType || 'text'
+            bodyType: request.bodyType || 'text',
+            variables: globalVariables
         };
     }
 

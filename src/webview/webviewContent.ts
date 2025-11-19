@@ -15,6 +15,7 @@ export class WebviewContentGenerator {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; img-src https: data:;">
     <title>HTTP Editor</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -49,7 +50,10 @@ export class WebviewContentGenerator {
                         <option value="HEAD">HEAD</option>
                         <option value="OPTIONS">OPTIONS</option>
                     </select>
-                    <input type="text" id="urlInput" placeholder="https://api.example.com/endpoint" onchange="onUrlChange()">
+                    <div class="url-input-wrapper">
+                        <input type="text" id="urlInput" placeholder="https://api.example.com/endpoint" onchange="onUrlChange()" oninput="updateUrlPreview()">
+                        <div class="url-preview" id="urlPreview"></div>
+                    </div>
                 </div>
                 <button class="btn-export" onclick="exportToCurl()" title="Export to cURL">📋 cURL</button>
                 <button class="btn-send" id="sendButton" onclick="sendRequest()">Send</button>
@@ -60,6 +64,7 @@ export class WebviewContentGenerator {
                     <div class="tab active" data-tab="query" onclick="switchTab('query')">Query</div>
                     <div class="tab" data-tab="headers" onclick="switchTab('headers')">Headers</div>
                     <div class="tab" data-tab="body" onclick="switchTab('body')">Body</div>
+                    <div class="tab" data-tab="variables" onclick="switchTab('variables')">Variables</div>
                     <div class="tab" data-tab="response" onclick="switchTab('response')">Response</div>
                 </div>
 
@@ -88,6 +93,14 @@ export class WebviewContentGenerator {
                         </div>
                         <textarea id="bodyInput" placeholder="Enter request body" onchange="updateCurrentRequest()"></textarea>
                     </div>
+                </div>
+
+                <div class="tab-content" id="variables-tab">
+                    <div class="variables-info">
+                        <p>Variables are defined in the .http file using the format: <code>@variableName = value</code></p>
+                        <p>Use variables in requests with the format: <code>{{variableName}}</code></p>
+                    </div>
+                    <div class="variables-editor" id="variablesEditor"></div>
                 </div>
 
                 <div class="tab-content" id="response-tab">
@@ -299,6 +312,70 @@ export class WebviewContentGenerator {
             flex: 1;
         }
 
+        .url-input-wrapper {
+            position: relative;
+            flex: 1;
+        }
+
+        .url-preview {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 8px 12px;
+            pointer-events: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 13px;
+            line-height: 1.5;
+            color: transparent;
+        }
+
+        .url-preview .variable-highlight {
+            color: var(--vscode-symbolIcon-variableForeground, #4FC1FF);
+            background-color: var(--vscode-editor-selectionBackground, rgba(79, 193, 255, 0.2));
+            padding: 1px 3px;
+            border-radius: 3px;
+            cursor: help;
+            position: relative;
+            pointer-events: auto;
+        }
+
+        .variable-tooltip {
+            position: absolute;
+            bottom: calc(100% + 5px);
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--vscode-editorHoverWidget-background);
+            border: 1px solid var(--vscode-editorHoverWidget-border);
+            color: var(--vscode-editorHoverWidget-foreground);
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .variable-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: var(--vscode-editorHoverWidget-border);
+        }
+
+        .variable-highlight:hover .variable-tooltip {
+            opacity: 1;
+        }
+
         select, input, textarea {
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
@@ -316,6 +393,20 @@ export class WebviewContentGenerator {
 
         input[type="text"] {
             flex: 1;
+        }
+
+        #urlInput {
+            position: relative;
+            z-index: 1;
+            background-color: transparent;
+        }
+
+        #urlInput:focus {
+            background-color: var(--vscode-input-background);
+        }
+
+        #urlInput:focus ~ .url-preview {
+            display: none;
         }
 
         .btn-send {
@@ -431,17 +522,66 @@ export class WebviewContentGenerator {
         }
 
         .query-editor,
-        .headers-editor {
+        .headers-editor,
+        .variables-editor {
             display: flex;
             flex-direction: column;
             gap: 8px;
         }
 
         .query-param-row,
-        .header-row {
+        .header-row,
+        .variable-row {
             display: flex;
             gap: 8px;
             align-items: center;
+        }
+
+        .variables-info {
+            padding: 12px;
+            background-color: var(--vscode-textBlockQuote-background);
+            border-left: 4px solid var(--vscode-textBlockQuote-border);
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+
+        .variables-info p {
+            margin: 4px 0;
+            font-size: 13px;
+            color: var(--vscode-foreground);
+        }
+
+        .variables-info code {
+            background-color: var(--vscode-textCodeBlock-background);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .variable-row {
+            background-color: var(--vscode-input-background);
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--vscode-input-border);
+        }
+
+        .variable-row .variable-name {
+            font-weight: 600;
+            color: var(--vscode-symbolIcon-variableForeground, #4FC1FF);
+            flex: 0 0 200px;
+        }
+
+        .variable-row .variable-value {
+            flex: 1;
+            color: var(--vscode-foreground);
+            word-break: break-all;
+        }
+
+        .variable-usage {
+            font-size: 11px;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 4px;
         }
 
         .query-param-row input[type="checkbox"] {
@@ -894,6 +1034,12 @@ export class WebviewContentGenerator {
             // Render headers
             renderHeaders(request.headers);
 
+            // Render variables
+            renderVariables(request.variables || {});
+
+            // Update URL preview
+            updateUrlPreview();
+
             // Update list
             renderRequestList();
 
@@ -959,6 +1105,68 @@ export class WebviewContentGenerator {
             container.appendChild(row);
         }
 
+        // Render variables
+        function renderVariables(variables) {
+            const container = document.getElementById('variablesEditor');
+            container.innerHTML = '';
+
+            const varEntries = Object.entries(variables);
+            
+            if (varEntries.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No variables defined. Add variables in the .http file using @variableName = value</p></div>';
+                return;
+            }
+
+            varEntries.forEach(([name, value]) => {
+                const row = document.createElement('div');
+                row.className = 'variable-row';
+                
+                // Find variable usage in current request
+                const request = requests.find(r => r.id === currentRequestId);
+                const usageCount = countVariableUsage(request, name);
+                const usageText = usageCount > 0 ? \`Used \${usageCount} time(s) in this request\` : 'Not used in this request';
+                
+                row.innerHTML = \`
+                    <div class="variable-name">@\${escapeHtml(name)}</div>
+                    <div class="variable-value">\${escapeHtml(value)}</div>
+                    <div class="variable-usage">\${usageText}</div>
+                \`;
+                container.appendChild(row);
+            });
+        }
+
+        // Count variable usage in request
+        function countVariableUsage(request, variableName) {
+            if (!request) return 0;
+            
+            let count = 0;
+            const pattern = new RegExp(\`{{\s*\${variableName}\s*}}\`, 'g');
+            
+            // Check URL
+            if (request.url) {
+                const matches = request.url.match(pattern);
+                count += matches ? matches.length : 0;
+            }
+            
+            // Check headers
+            if (request.headers) {
+                Object.values(request.headers).forEach(value => {
+                    if (value) {
+                        const matches = value.match(pattern);
+                        count += matches ? matches.length : 0;
+                    }
+                });
+            }
+            
+            // Check body
+            if (request.body) {
+                const matches = request.body.match(pattern);
+                count += matches ? matches.length : 0;
+            }
+            
+            return count;
+        }
+
         // Update current request
         function updateCurrentRequest() {
             const request = requests.find(r => r.id === currentRequestId);
@@ -1006,6 +1214,9 @@ export class WebviewContentGenerator {
 
             // Auto-set Content-Type if not specified
             updateContentTypeHeader(request);
+
+            // Update URL preview
+            updateUrlPreview();
 
             renderRequestList();
         }
@@ -1077,6 +1288,46 @@ export class WebviewContentGenerator {
             return queryParams;
         }
 
+        // Update URL preview with variable highlighting
+        function updateUrlPreview() {
+            const urlInput = document.getElementById('urlInput');
+            const urlPreview = document.getElementById('urlPreview');
+            const request = requests.find(r => r.id === currentRequestId);
+            
+            if (!request || !urlInput || !urlPreview) return;
+
+            const url = urlInput.value;
+            const variables = request.variables || {};
+            
+            // Find all variables in the URL
+            const variablePattern = /{{(\s*\w+\s*)}}/g;
+            let html = '';
+            let lastIndex = 0;
+            let match;
+            
+            while ((match = variablePattern.exec(url)) !== null) {
+                const varName = match[1].trim();
+                const varValue = variables[varName];
+                
+                // Add text before variable
+                html += escapeHtml(url.substring(lastIndex, match.index));
+                
+                // Add highlighted variable with tooltip
+                if (varValue !== undefined) {
+                    html += \`<span class="variable-highlight">\${escapeHtml(match[0])}<span class="variable-tooltip">@\${escapeHtml(varName)} = \${escapeHtml(varValue)}</span></span>\`;
+                } else {
+                    html += \`<span class="variable-highlight" style="color: var(--vscode-errorForeground);">\${escapeHtml(match[0])}<span class="variable-tooltip">Variable not defined</span></span>\`;
+                }
+                
+                lastIndex = variablePattern.lastIndex;
+            }
+            
+            // Add remaining text
+            html += escapeHtml(url.substring(lastIndex));
+            
+            urlPreview.innerHTML = html;
+        }
+
         // Handle URL change
         function onUrlChange() {
             const request = requests.find(r => r.id === currentRequestId);
@@ -1095,6 +1346,9 @@ export class WebviewContentGenerator {
             
             // Update the request
             updateCurrentRequest();
+            
+            // Update URL preview
+            updateUrlPreview();
         }
 
         // Update request body type
@@ -1128,6 +1382,9 @@ export class WebviewContentGenerator {
 
         // Add new request
         function addNewRequest() {
+            // Get variables from the first request if available
+            const existingVariables = requests.length > 0 ? (requests[0].variables || {}) : {};
+            
             const newRequest = {
                 id: Date.now() + Math.random(),
                 name: 'New Request',
@@ -1136,7 +1393,8 @@ export class WebviewContentGenerator {
                 headers: {},
                 queryParams: [],
                 body: '',
-                bodyType: 'text'
+                bodyType: 'text',
+                variables: existingVariables
             };
 
             requests.push(newRequest);
@@ -1169,6 +1427,19 @@ export class WebviewContentGenerator {
             }
         }
 
+        // Replace variables in string
+        function replaceVariables(text, variables) {
+            if (!text || !variables) return text;
+            
+            let result = text;
+            Object.entries(variables).forEach(([name, value]) => {
+                const pattern = new RegExp(\`{{\s*\${name}\s*}}\`, 'g');
+                result = result.replace(pattern, value);
+            });
+            
+            return result;
+        }
+
         // Send request
         function sendRequest() {
             updateCurrentRequest();
@@ -1176,8 +1447,21 @@ export class WebviewContentGenerator {
             const request = requests.find(r => r.id === currentRequestId);
             if (!request) return;
 
+            // Create a copy of the request with variables replaced
+            const processedRequest = {
+                ...request,
+                url: replaceVariables(request.url, request.variables),
+                headers: {},
+                body: replaceVariables(request.body, request.variables)
+            };
+
+            // Replace variables in headers
+            Object.entries(request.headers).forEach(([key, value]) => {
+                processedRequest.headers[key] = replaceVariables(value, request.variables);
+            });
+
             // Validate URL
-            if (!request.url || !request.url.startsWith('http')) {
+            if (!processedRequest.url || !processedRequest.url.startsWith('http')) {
                 alert('Please enter a valid URL starting with http:// or https://');
                 return;
             }
@@ -1188,7 +1472,7 @@ export class WebviewContentGenerator {
 
             vscode.postMessage({
                 command: 'sendRequest',
-                request: request
+                request: processedRequest
             });
 
             // Switch to Response tab
