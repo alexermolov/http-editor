@@ -165,6 +165,24 @@ export class HttpFileParser {
   public serialize(requests: HttpRequest[]): string {
     let content = "";
 
+    // Extract and write global variables
+    // Collect all unique variables from all requests
+    const allVariables: Record<string, string> = {};
+    for (const req of requests) {
+      if (req.variables) {
+        Object.assign(allVariables, req.variables);
+      }
+    }
+
+    // Write variables at the beginning of the file
+    if (Object.keys(allVariables).length > 0) {
+      for (const [name, value] of Object.entries(allVariables)) {
+        content += `@${name} = ${value}\n`;
+      }
+      content += "\n";
+    }
+
+    // Write requests
     for (const req of requests) {
       // Request name
       content += `### ${req.name}\n`;

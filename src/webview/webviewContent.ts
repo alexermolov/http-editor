@@ -34,7 +34,6 @@ export class WebviewContentGenerator {
 
         <div class="main-content">
             <div class="new-request-group">
-                <button class="btn-new-request" onclick="addNewRequest()" title="Create New Request">+ New Request</button>
                 <button class="btn-import" onclick="openImportModal()" title="Import Postman Collection or cURL">📥 Import</button>
             </div>
             <div class="editor-header">

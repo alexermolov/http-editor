@@ -2,7 +2,7 @@
   "name": "http-editor",
   "displayName": "HTTP Request Editor",
   "description": "Advanced HTTP request editor with Postman-like interface for .http files",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "publisher": "alexermolov",
   "author": {
     "name": "Alex Ermolov"
