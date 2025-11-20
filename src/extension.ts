@@ -6,6 +6,9 @@ import { HttpEditorWebviewProvider } from './webview/webviewProvider';
  */
 export function activate(context: vscode.ExtensionContext): void {
     try {
+        // Disable SSL certificate verification globally to handle proxy issues
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+        
         console.log('HTTP Editor extension is activating...');
         
         const webviewProvider = new HttpEditorWebviewProvider(context);

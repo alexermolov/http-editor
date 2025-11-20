@@ -1,4 +1,6 @@
 import axios, { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import https from 'https';
+import http from 'http';
 import { HttpRequest, HttpResponse } from '../types';
 
 /**
@@ -37,7 +39,17 @@ export class HttpClient {
             method: request.method.toLowerCase(),
             url: request.url,
             headers: request.headers || {},
-            timeout: this.timeout
+            timeout: this.timeout,
+            // Disable SSL certificate verification to avoid proxy certificate issues
+            httpsAgent: new https.Agent({
+                rejectUnauthorized: false,
+                keepAlive: true
+            }),
+            httpAgent: new http.Agent({
+                keepAlive: true
+            }),
+            // Additional settings to handle proxy issues
+            maxRedirects: 5
         };
 
         // Add request body for methods that support it
