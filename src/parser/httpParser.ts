@@ -50,6 +50,9 @@ export class HttpFileParser {
             );
           }
 
+          // Check for @PRE-AUTH marker
+          const isPreAuth = commentText === "@PRE-AUTH";
+          
           // Начинаем новый запрос
           currentRequest = {
             id: Date.now() + Math.random(),
@@ -57,13 +60,24 @@ export class HttpFileParser {
               commentText ||
               (pendingComments.length > 0
                 ? pendingComments.join(" ")
-                : `Request ${requests.length + 1}`),
+                : ""), // Will be set later based on URL
             method: "GET",
             url: "",
             headers: {},
             body: "",
             variables: {},
           };
+          
+          // Mark as pre-auth request if applicable
+          if (isPreAuth) {
+            currentRequest.preAuth = {
+              enabled: true,
+              curlCommand: "",
+              responsePath: "",
+            };
+            currentRequest.isPreAuthRequest = true;
+          }
+          
           inBody = false;
           bodyLines = [];
           pendingComments = [];
@@ -91,7 +105,7 @@ export class HttpFileParser {
             name:
               pendingComments.length > 0
                 ? pendingComments.join(" ")
-                : `Request ${requests.length + 1}`,
+                : "", // Will be set later based on URL
             method: "GET",
             url: "",
             headers: {},
@@ -106,6 +120,10 @@ export class HttpFileParser {
           const { method, url } = this.parseMethodLine(line);
           currentRequest.method = method;
           currentRequest.url = url;
+          // Set name from URL if not already set
+          if (!currentRequest.name) {
+            currentRequest.name = this.extractRouteFromUrl(url, method) || url;
+          }
         }
         continue;
       }
@@ -184,8 +202,12 @@ export class HttpFileParser {
 
     // Write requests
     for (const req of requests) {
-      // Request name
-      content += `### ${req.name}\n`;
+      // Request name (use @PRE-AUTH marker if it's a pre-auth request)
+      if (req.preAuth?.enabled) {
+        content += `### @PRE-AUTH\n`;
+      } else {
+        content += `### ${req.name}\n`;
+      }
 
       // Method and URL
       content += `${req.method} ${req.url}\n`;
@@ -198,8 +220,16 @@ export class HttpFileParser {
       }
 
       // Request body
-      if (req.body && req.body.trim()) {
-        content += `\n${req.body}\n`;
+      let bodyContent = req.body || "";
+      if (
+        req.isPreAuthRequest ||
+        req.name?.trim().toUpperCase() === "@PRE-AUTH"
+      ) {
+        bodyContent = this.sanitizePreAuthBody(bodyContent);
+      }
+
+      if (bodyContent.trim()) {
+        content += `\n${bodyContent}\n`;
       }
       content += "\n";
     }
@@ -242,8 +272,46 @@ export class HttpFileParser {
   private parseVariable(line: string): { name: string; value: string } {
     const equalIndex = line.indexOf("=");
     const name = line.substring(1, equalIndex).trim(); // Remove @ prefix
-    const value = line.substring(equalIndex + 1).trim();
+    let value = line.substring(equalIndex + 1).trim();
+    
+    // Remove surrounding quotes if present
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    
     return { name, value };
+  }
+
+  /**
+   * Extracts route/path from URL for request name
+   */
+  private extractRouteFromUrl(url: string, method?: string): string {
+    if (!url) {
+      return "";
+    }
+    
+    let route = "";
+    try {
+      // Handle URLs with variables like {{baseUrl}}/endpoint
+      if (url.includes("{{")) {
+        // Just return the URL as-is if it contains variables
+        route = url;
+      } else {
+        const urlObj = new URL(url);
+        const path = urlObj.pathname + urlObj.search;
+        route = path || url;
+      }
+    } catch {
+      // If URL parsing fails, return the whole URL
+      route = url;
+    }
+    
+    // Prepend method if provided
+    if (method) {
+      return `${method} ${route}`;
+    }
+    
+    return route;
   }
 
   /**
@@ -253,15 +321,27 @@ export class HttpFileParser {
     request: Partial<HttpRequest>,
     globalVariables: Record<string, string>
   ): HttpRequest {
+    // Use URL route as name if name is empty
+    let finalName = request.name || "";
+    if (!finalName && request.url) {
+      const method = request.method || "GET";
+      finalName = this.extractRouteFromUrl(request.url, method) || request.url;
+    }
+    if (!finalName) {
+      finalName = "Unnamed Request";
+    }
+    
     return {
       id: request.id || Date.now(),
-      name: request.name || "Unnamed Request",
+      name: finalName,
       method: request.method || "GET",
       url: request.url || "",
       headers: request.headers || {},
       body: request.body || "",
       bodyType: request.bodyType || "text",
       variables: globalVariables,
+      preAuth: request.preAuth,
+      isPreAuthRequest: Boolean(request.isPreAuthRequest),
     };
   }
 
@@ -278,6 +358,47 @@ export class HttpFileParser {
       body: "",
       bodyType: "text",
     };
+  }
+
+  /**
+   * Removes credential values from pre-auth request bodies before saving to disk
+   */
+  private sanitizePreAuthBody(body: string): string {
+    if (!body) {
+      return body;
+    }
+
+    const credentialKeys = [
+      "email",
+      "login",
+      "username",
+      "user",
+      "password",
+      "pass",
+    ];
+    let sanitized = body;
+
+    for (const key of credentialKeys) {
+      const doubleQuoted = new RegExp(`("${key}"\s*:\s*")([^\"]*)(")`, "gi");
+      sanitized = sanitized.replace(
+        doubleQuoted,
+        (_match, prefix, _value, suffix) => `${prefix}${suffix}`
+      );
+
+      const singleQuoted = new RegExp(`('${key}'\s*:\s*')([^']*)(')`, "gi");
+      sanitized = sanitized.replace(
+        singleQuoted,
+        (_match, prefix, _value, suffix) => `${prefix}${suffix}`
+      );
+    }
+
+    const formPattern = new RegExp(
+      `\\b(${credentialKeys.join("|")})=([^&\\r\\n]*)`,
+      "gi"
+    );
+    sanitized = sanitized.replace(formPattern, (_match, key) => `${key}=`);
+
+    return sanitized;
   }
 
   /**

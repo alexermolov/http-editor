@@ -208,35 +208,45 @@ export class ImportParser {
         // Remove curl prefix and normalize whitespace
         let cmd = curlCommand.trim().replace(/^curl\s+/i, '');
         
-        // Extract URL (first non-flag argument or -L/--location argument)
-        const urlMatch = cmd.match(/(?:^|\s)(?!-)['""]?([^'""]*?https?:\/\/[^\s'"]+)/i) ||
-                        cmd.match(/(?:-L|--location)\s+['""]?([^'""]+)/i);
-        if (urlMatch) {
-            request.url = urlMatch[1].replace(/['"]/g, '');
-        }
-        
-        // Extract method
+        // Extract method first
         const methodMatch = cmd.match(/(?:-X|--request)\s+([A-Z]+)/i);
         if (methodMatch) {
             request.method = methodMatch[1].toUpperCase() as HttpMethod;
         }
         
+        // Extract URL (match http/https URL, but skip if it's part of a method flag)
+        // First try to find URL after method flag, then look for standalone URL
+        const urlMatch = cmd.match(/(?:-X|--request)\s+[A-Z]+\s+['""]?(https?:\/\/[^\s'"]+)/i) ||
+                        cmd.match(/(?:^|\s)(?!-)['""]?(https?:\/\/[^\s'"]+)/i) ||
+                        cmd.match(/(?:-L|--location)\s+['""]?([^'""]+)/i);
+        if (urlMatch) {
+            request.url = urlMatch[1].replace(/['"]/g, '');
+        }
+        
         // Extract headers
-        const headerRegex = /(?:-H|--header)\s+['""]([^'""]+)['"]/gi;
+        const headerRegex = /(?:-H|--header)\s+['"](.*?)['"]/gi;
         let headerMatch;
         while ((headerMatch = headerRegex.exec(cmd)) !== null) {
             const headerLine = headerMatch[1];
             const colonIndex = headerLine.indexOf(':');
             if (colonIndex > 0) {
                 const key = headerLine.substring(0, colonIndex).trim();
-                const value = headerLine.substring(colonIndex + 1).trim();
-                request.headers[key] = value;
+                let value = headerLine.substring(colonIndex + 1).trim();
+                // Remove surrounding quotes from value if present
+                if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                    value = value.slice(1, -1);
+                }
+                // Skip empty quoted values like ""
+                if (value !== '') {
+                    request.headers[key] = value;
+                }
             }
         }
         
-        // Extract body data
-        const dataMatch = cmd.match(/(?:-d|--data|--data-raw|--data-binary)\s+['""]([^'""]+)['"]/i) ||
-                         cmd.match(/(?:-d|--data|--data-raw|--data-binary)\s+'([^']+)'/i);
+        // Extract body data - improved to handle multiline JSON
+        // Match -d flag followed by quoted content (including newlines)
+        const dataMatch = cmd.match(/(?:-d|--data|--data-raw|--data-binary)\s+'([\s\S]*?)'\s*$/i) ||
+                         cmd.match(/(?:-d|--data|--data-raw|--data-binary)\s+"([\s\S]*?)"\s*$/i);
         if (dataMatch) {
             request.body = dataMatch[1];
             request.bodyType = this.detectBodyType(request.body, request.headers['Content-Type'] || request.headers['content-type']);

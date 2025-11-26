@@ -36,6 +36,43 @@ export class WebviewContentGenerator {
             <div class="new-request-group">
                 <button class="btn-import" onclick="openImportModal()" title="Import Postman Collection or cURL">📥 Import</button>
             </div>
+            
+            <div class="pre-auth-section" id="preAuthSection">
+                <div class="pre-auth-header">
+                    <div class="pre-auth-toggle" onclick="togglePreAuthExpand()">
+                        <label onclick="event.stopPropagation()" style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                            <input type="checkbox" id="preAuthEnabled" onchange="togglePreAuth()">
+                            <span>Pre-Request Authentication</span>
+                        </label>
+                        <span class="pre-auth-arrow" id="preAuthArrow">▼</span>
+                    </div>
+                </div>
+                <div class="pre-auth-content" id="preAuthContent" style="display: none;">
+                    <div class="pre-auth-info">
+                        <p>Execute an authentication request before the main request. The response value will be stored in the <code>@auth</code> variable.</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Authentication cURL Command</label>
+                        <textarea id="preAuthCurl" placeholder="curl -X POST https://api.example.com/auth -H 'Content-Type: application/json' -d '{&quot;username&quot;: &quot;{{username}}&quot;, &quot;password&quot;: &quot;{{password}}&quot;}'" onchange="updatePreAuthConfig()" rows="4"></textarea>
+                    </div>
+                    <div class="pre-auth-credentials">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="preAuthUsername" placeholder="Enter username" onchange="updatePreAuthConfig()">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" id="preAuthPassword" placeholder="Enter password" onchange="updatePreAuthConfig()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Response JSON Path</label>
+                        <input type="text" id="preAuthPath" placeholder="e.g., token or data.access_token" onchange="updatePreAuthConfig()">
+                        <small style="color: var(--vscode-descriptionForeground); margin-top: 4px; display: block;">Path to extract the auth value from the JSON response</small>
+                    </div>
+                </div>
+            </div>
+            
             <div class="editor-header">
                 
                 <div class="input-group">
@@ -112,6 +149,8 @@ export class WebviewContentGenerator {
     </div>
 
     <button class="save-button" onclick="saveAllRequests()">💾 Save All</button>
+
+    <div id="notificationContainer"></div>
 
     <!-- Import Modal -->
     <div id="importModal" class="modal">
@@ -308,12 +347,12 @@ export class WebviewContentGenerator {
         .input-group {
             display: flex;
             gap: 8px;
-            flex: 1;
+            flex: 3;
         }
 
         .url-input-wrapper {
             position: relative;
-            flex: 1;
+            flex: 2;
         }
 
         .url-preview {
@@ -394,10 +433,20 @@ export class WebviewContentGenerator {
             flex: 1;
         }
 
+        #requestName {
+            flex: 0 0 200px;
+            min-width: 150px;
+        }
+
+        #methodSelect {
+            flex: 0 0 auto;
+        }
+
         #urlInput {
             position: relative;
             z-index: 1;
             background-color: transparent;
+            width: 100%;
         }
 
         #urlInput:focus {
@@ -456,6 +505,91 @@ export class WebviewContentGenerator {
 
         .btn-export:hover {
             background-color: var(--vscode-button-secondaryHoverBackground);
+        }
+
+        /* Pre-Auth Section Styles */
+        .pre-auth-section {
+            margin: 16px;
+            padding: 12px;
+            background-color: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+        }
+
+        .pre-auth-header {
+            margin-bottom: 12px;
+        }
+
+        .pre-auth-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--vscode-foreground);
+        }
+
+        .pre-auth-toggle input[type="checkbox"] {
+            width: auto;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .pre-auth-arrow {
+            margin-left: auto;
+            font-size: 10px;
+            transition: transform 0.2s ease;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .pre-auth-arrow.expanded {
+            transform: rotate(-180deg);
+        }
+
+        .pre-auth-content {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--vscode-panel-border);
+        }
+
+        .pre-auth-info {
+            margin-bottom: 12px;
+            padding: 8px;
+            background-color: var(--vscode-textBlockQuote-background);
+            border-left: 3px solid var(--vscode-textLink-foreground);
+            border-radius: 3px;
+        }
+
+        .pre-auth-info p {
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .pre-auth-info code {
+            background-color: var(--vscode-textCodeBlock-background);
+            color: var(--vscode-textPreformat-foreground);
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+        }
+
+        .pre-auth-credentials {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--vscode-foreground);
         }
 
         .editor-body {
@@ -763,6 +897,55 @@ export class WebviewContentGenerator {
             background-color: var(--vscode-button-hoverBackground);
         }
 
+
+
+        #notificationContainer {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        .notification {
+            min-width: 260px;
+            padding: 10px 14px;
+            border-radius: 6px;
+            background-color: var(--vscode-notifications-background, var(--vscode-editorHoverWidget-background));
+            color: var(--vscode-notifications-foreground, var(--vscode-editorHoverWidget-foreground));
+            border: 1px solid var(--vscode-notifications-border, var(--vscode-editorHoverWidget-border));
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+            font-size: 13px;
+        }
+
+        .notification-error {
+            border-left: 4px solid var(--vscode-errorForeground);
+        }
+
+        .notification-info {
+            border-left: 4px solid var(--vscode-inputOption-activeBorder);
+        }
+
+        .notification-success {
+            border-left: 4px solid var(--vscode-terminal-ansiGreen, #3fb950);
+        }
+
+        .notification button {
+            background: transparent;
+            border: none;
+            color: inherit;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
         .btn-import {
             background-color: var(--vscode-button-secondaryBackground);
             color: var(--vscode-button-secondaryForeground);
@@ -778,7 +961,6 @@ export class WebviewContentGenerator {
             background-color: var(--vscode-button-secondaryHoverBackground);
         }
 
-        /* Modal styles */
         .modal {
             display: none;
             position: fixed;
@@ -980,6 +1162,15 @@ export class WebviewContentGenerator {
         let requests = ${requestsJson};
         let currentRequestId = requests.length > 0 ? requests[0].id : null;
         let lastResponse = null;
+        
+        // Global pre-auth configuration (shared across all requests)
+        let globalPreAuthConfig = {
+            enabled: false,
+            curlCommand: '',
+            responsePath: '',
+            username: '',
+            password: ''
+        };
 
         // Initialize
         function init() {
@@ -1035,6 +1226,14 @@ export class WebviewContentGenerator {
 
             // Render variables
             renderVariables(request.variables || {});
+            
+            // Render pre-auth config from global state
+            renderPreAuth(globalPreAuthConfig);
+            
+            // Auto-populate from @PRE-AUTH if enabled and fields are empty
+            if (globalPreAuthConfig.enabled && !globalPreAuthConfig.curlCommand) {
+                autoPopulateFromPreAuthRequest();
+            }
 
             // Update URL preview
             updateUrlPreview();
@@ -1045,6 +1244,107 @@ export class WebviewContentGenerator {
             // Reset response
             lastResponse = null;
             document.getElementById('responseContainer').innerHTML = '<div class="empty-state"><p>No response yet. Send a request to see the response.</p></div>';
+        }
+
+        // Toggle pre-auth expand/collapse
+        function togglePreAuthExpand() {
+            const content = document.getElementById('preAuthContent');
+            const arrow = document.getElementById('preAuthArrow');
+            const isExpanded = content.style.display === 'block';
+            
+            content.style.display = isExpanded ? 'none' : 'block';
+            arrow.classList.toggle('expanded', !isExpanded);
+        }
+
+        // Toggle pre-auth
+        function togglePreAuth() {
+            const enabled = document.getElementById('preAuthEnabled').checked;
+            const content = document.getElementById('preAuthContent');
+            const arrow = document.getElementById('preAuthArrow');
+            
+            if (enabled) {
+                content.style.display = 'block';
+                arrow.classList.add('expanded');
+                
+                // Try to auto-populate from @PRE-AUTH request
+                autoPopulateFromPreAuthRequest();
+            } else {
+                content.style.display = 'none';
+                arrow.classList.remove('expanded');
+            }
+            
+            updatePreAuthConfig();
+        }
+
+        // Auto-populate from @PRE-AUTH request
+        function autoPopulateFromPreAuthRequest() {
+            // Find the @PRE-AUTH request in the list
+            const preAuthRequest = requests.find(r => r.isPreAuthRequest === true);
+            
+            if (!preAuthRequest) {
+                return; // No @PRE-AUTH request found
+            }
+
+            // Build cURL command from the request
+            let curlCommand = \`curl -X \${preAuthRequest.method} \${preAuthRequest.url}\`;
+            
+            // Add headers
+            for (const [key, value] of Object.entries(preAuthRequest.headers)) {
+                if (key && value) {
+                    curlCommand += \` -H '\${key}: \${value}'\`;
+                }
+            }
+            
+            // Add body with placeholders for username and password
+            if (preAuthRequest.body && preAuthRequest.body.trim()) {
+                // Replace any existing credential values with placeholders
+                let body = preAuthRequest.body;
+                
+                // Try to replace common patterns for email/username and password
+                body = body.replace(/"email"\s*:\s*"[^"]*"/, '"email": "{{username}}"');
+                body = body.replace(/"username"\s*:\s*"[^"]*"/, '"username": "{{username}}"');
+                body = body.replace(/"user"\s*:\s*"[^"]*"/, '"user": "{{username}}"');
+                body = body.replace(/"password"\s*:\s*"[^"]*"/, '"password": "{{password}}"');
+                body = body.replace(/"pass"\s*:\s*"[^"]*"/, '"pass": "{{password}}"');
+                
+                curlCommand += \` -d '\${body}'\`;
+            }
+
+            // Populate the fields
+            document.getElementById('preAuthCurl').value = curlCommand;
+            document.getElementById('preAuthUsername').value = '';
+            document.getElementById('preAuthPassword').value = '';
+            document.getElementById('preAuthPath').value = '';
+            
+            // Update global config
+            globalPreAuthConfig.curlCommand = curlCommand;
+        }
+
+        // Render pre-auth configuration
+        function renderPreAuth(preAuth) {
+            const arrow = document.getElementById('preAuthArrow');
+            document.getElementById('preAuthEnabled').checked = preAuth.enabled;
+            document.getElementById('preAuthContent').style.display = preAuth.enabled ? 'block' : 'none';
+            
+            if (preAuth.enabled) {
+                arrow.classList.add('expanded');
+            } else {
+                arrow.classList.remove('expanded');
+            }
+            
+            document.getElementById('preAuthCurl').value = preAuth.curlCommand;
+            document.getElementById('preAuthPath').value = preAuth.responsePath;
+            document.getElementById('preAuthUsername').value = preAuth.username;
+            document.getElementById('preAuthPassword').value = preAuth.password;
+        }
+
+        // Update pre-auth configuration
+        function updatePreAuthConfig() {
+            globalPreAuthConfig.enabled = document.getElementById('preAuthEnabled').checked;
+            globalPreAuthConfig.curlCommand = document.getElementById('preAuthCurl').value;
+            globalPreAuthConfig.responsePath = document.getElementById('preAuthPath').value;
+            globalPreAuthConfig.username = document.getElementById('preAuthUsername').value;
+            globalPreAuthConfig.password = document.getElementById('preAuthPassword').value;
         }
 
         // Render query params
@@ -1439,12 +1739,64 @@ export class WebviewContentGenerator {
             return result;
         }
 
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notificationContainer');
+            if (!container) {
+                return;
+            }
+
+            const notification = document.createElement('div');
+            notification.className = 'notification notification-' + type;
+
+            const messageNode = document.createElement('span');
+            messageNode.textContent = message;
+            notification.appendChild(messageNode);
+
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.setAttribute('aria-label', 'Dismiss notification');
+            closeButton.textContent = '×';
+            closeButton.onclick = () => {
+                if (notification.parentElement === container) {
+                    container.removeChild(notification);
+                }
+            };
+
+            notification.appendChild(closeButton);
+            container.appendChild(notification);
+
+            setTimeout(() => {
+                if (notification.parentElement === container) {
+                    container.removeChild(notification);
+                }
+            }, 5000);
+        }
+
         // Send request
-        function sendRequest() {
+        async function sendRequest() {
             updateCurrentRequest();
             
             const request = requests.find(r => r.id === currentRequestId);
             if (!request) return;
+
+            const sendButton = document.getElementById('sendButton');
+            sendButton.disabled = true;
+
+            // Check if pre-auth is enabled (using global config)
+            if (globalPreAuthConfig.enabled) {
+                // Execute pre-auth request first
+                sendButton.textContent = 'Authenticating...';
+                
+                try {
+                    await executePreAuth(request, request.variables || {});
+                } catch (error) {
+                    console.error('Pre-auth error:', error);
+                    showNotification('Pre-authentication failed: ' + error.message, 'error');
+                    sendButton.disabled = false;
+                    sendButton.textContent = 'Send';
+                    return;
+                }
+            }
 
             // Create a copy of the request with variables replaced
             const processedRequest = {
@@ -1461,12 +1813,12 @@ export class WebviewContentGenerator {
 
             // Validate URL
             if (!processedRequest.url || !processedRequest.url.startsWith('http')) {
-                alert('Please enter a valid URL starting with http:// or https://');
+                showNotification('Please enter a valid URL starting with http:// or https://', 'error');
+                sendButton.disabled = false;
+                sendButton.textContent = 'Send';
                 return;
             }
 
-            const sendButton = document.getElementById('sendButton');
-            sendButton.disabled = true;
             sendButton.textContent = 'Sending...';
 
             vscode.postMessage({
@@ -1476,6 +1828,48 @@ export class WebviewContentGenerator {
 
             // Switch to Response tab
             switchTab('response');
+        }
+
+        // Execute pre-auth request
+        function executePreAuth(request, variables) {
+            return new Promise((resolve, reject) => {
+                if (!globalPreAuthConfig.curlCommand || !globalPreAuthConfig.responsePath) {
+                    reject(new Error('Pre-auth configuration is incomplete'));
+                    return;
+                }
+
+                console.log('Executing pre-auth with config:', {
+                    curlCommand: globalPreAuthConfig.curlCommand,
+                    responsePath: globalPreAuthConfig.responsePath,
+                    hasUsername: !!globalPreAuthConfig.username,
+                    hasPassword: !!globalPreAuthConfig.password,
+                    variables: variables
+                });
+
+                // Store callback for handling response
+                window.preAuthCallback = (success, authToken, error) => {
+                    if (success) {
+                        console.log('Pre-auth success, token:', authToken);
+                        // Add @auth variable to request
+                        if (!request.variables) {
+                            request.variables = {};
+                        }
+                        request.variables['auth'] = authToken;
+                        resolve();
+                    } else {
+                        console.error('Pre-auth failed:', error);
+                        reject(new Error(error || 'Pre-authentication failed'));
+                    }
+                };
+
+                // Send pre-auth request to extension
+                vscode.postMessage({
+                    command: 'executePreAuth',
+                    preAuth: globalPreAuthConfig,
+                    variables: variables,
+                    requestId: request.id
+                });
+            });
         }
 
         // Export to cURL
@@ -1707,7 +2101,7 @@ export class WebviewContentGenerator {
                     command: 'log',
                     text: 'Please select a JSON file'
                 });
-                alert('Please select a JSON file');
+                showNotification('Please select a JSON file', 'error');
                 return;
             }
 
@@ -1717,7 +2111,7 @@ export class WebviewContentGenerator {
                 processImport(content);
             };
             reader.onerror = () => {
-                alert('Failed to read file');
+                showNotification('Failed to read file', 'error');
             };
             reader.readAsText(file);
         }
@@ -1725,7 +2119,7 @@ export class WebviewContentGenerator {
         function handleTextImport() {
             const content = document.getElementById('importTextInput').value.trim();
             if (!content) {
-                alert('Please paste content to import');
+                showNotification('Please paste content to import', 'error');
                 return;
             }
             processImport(content);
@@ -1751,16 +2145,24 @@ export class WebviewContentGenerator {
                         
                         // Select first imported request
                         selectRequest(message.requests[0].id);
-                        
+                        showNotification('Successfully imported ' + message.requests.length + ' request(s)', 'success');
                         closeImportModal();
                         
                         vscode.postMessage({
                             command: 'log',
                             text: \`Successfully imported \${message.requests.length} request(s)\`
                         });
+                    } else {
+                        showNotification('Import completed but no requests were found.', 'info');
                     }
                 } else {
-                    alert(\`Import failed: \${message.error || 'Unknown error'}\`);
+                    showNotification('Import failed: ' + (message.error || 'Unknown error'), 'error');
+                }
+            } else if (message.command === 'preAuthComplete') {
+                // Handle pre-auth response
+                if (window.preAuthCallback) {
+                    window.preAuthCallback(message.success, message.authToken, message.error);
+                    delete window.preAuthCallback;
                 }
             }
         });

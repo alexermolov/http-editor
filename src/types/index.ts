@@ -16,6 +16,17 @@ export interface Variable {
 }
 
 /**
+ * Pre-authentication configuration
+ */
+export interface PreAuthConfig {
+    enabled: boolean;
+    curlCommand: string;
+    responsePath: string;
+    username?: string;
+    password?: string;
+}
+
+/**
  * Interface for HTTP request
  */
 export interface HttpRequest {
@@ -28,6 +39,8 @@ export interface HttpRequest {
     body: string;
     bodyType?: BodyType;
     variables?: Record<string, string>;
+    preAuth?: PreAuthConfig;
+    isPreAuthRequest?: boolean;
 }
 
 /**
@@ -88,4 +101,11 @@ export interface ExportToCurlMessage extends Message {
 export interface ImportRequestsMessage extends Message {
     command: 'importRequests';
     content: string;
+}
+
+export interface ExecutePreAuthMessage extends Message {
+    command: 'executePreAuth';
+    preAuth: PreAuthConfig;
+    variables?: Record<string, string>;
+    requestId: number | string;
 }

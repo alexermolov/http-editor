@@ -12,8 +12,11 @@ A VS Code extension for working with `.http` files featuring a Postman-like inte
 - ✏️ **Rich Editor** - Edit request method, URL, headers, and body with intuitive controls
 - 🎯 **Multiple Body Types** - Support for JSON, URL-encoded, XML, HTML, JavaScript, and plain text
 - 🚀 **Send Requests** - Execute HTTP requests and view responses in real-time
+- 🔐 **Pre-Request Auth** - Automatic authentication with token extraction from auth responses
 - 📊 **Response Viewer** - Inspect response status, headers, and formatted body
+- 🔤 **Variables** - Define and use variables throughout your requests
 - 📋 **cURL Export** - Export any request to cURL command (Windows/Unix compatible)
+- 📥 **Import** - Import Postman collections and cURL commands
 - 💾 **Auto-save** - Save your changes back to the `.http` file
 - 🎨 **VS Code Themes** - Seamlessly integrates with your editor theme
 
@@ -41,6 +44,31 @@ Alternatively, right-click on an open `.http` file tab and select the same optio
 3. Click **"Send"** button
 4. View the response in the Response tab
 
+### Pre-Request Authentication
+
+The extension supports automatic authentication before sending your main requests:
+
+1. **Enable Pre-Auth**: Toggle "Pre-Request Authentication" at the top of the editor
+2. **Configure Auth Request**: Paste a cURL command for your authentication endpoint
+   - Use `{{username}}` and `{{password}}` placeholders in the cURL command
+   - Enter your credentials in the Username and Password fields
+3. **Set Response Path**: Specify the JSON path to extract the token (e.g., `token` or `data.access_token`)
+4. **Use Auth Token**: The extracted value will be stored in the `@auth` variable and automatically used in your requests
+
+**Example:**
+
+```
+### @PRE-AUTH
+```
+
+The pre-auth configuration is stored in the `.http` file with the special `### @PRE-AUTH` marker, but credentials are **never** saved to the file - they are only kept in memory during your session for security.
+
+Use the `{{auth}}` variable in your requests' headers:
+
+```http
+Authorization: Bearer {{auth}}
+```
+
 ### Export to cURL
 
 Click the **"📋 cURL"** button to copy the current request as a cURL command to your clipboard.
@@ -48,12 +76,16 @@ Click the **"📋 cURL"** button to copy the current request as a cURL command t
 ## .http File Format
 
 ```http
+@baseUrl = https://api.example.com
+@apiKey = your-api-key-here
+
 ### Get All Users
-GET https://api.example.com/users
+GET {{baseUrl}}/users
 Accept: application/json
+X-API-Key: {{apiKey}}
 
 ### Create User
-POST https://api.example.com/users
+POST {{baseUrl}}/users
 Content-Type: application/json
 
 {
@@ -61,9 +93,10 @@ Content-Type: application/json
   "email": "john@example.com"
 }
 
-### Update User
-PUT https://api.example.com/users/1
+### Update User with Auth
+PUT {{baseUrl}}/users/1
 Content-Type: application/json
+Authorization: Bearer {{auth}}
 
 {
   "name": "Jane Doe"
@@ -72,7 +105,10 @@ Content-Type: application/json
 
 **Format Rules:**
 
+- `@variableName = value` - Define variables at the top of the file
+- `{{variableName}}` - Use variables in URLs, headers, or body
 - `###` - Request separator (followed by optional request name)
+- `### @PRE-AUTH` - Special marker for pre-authentication configuration
 - First line after separator: `METHOD URL`
 - Headers: `Header-Name: Value`
 - Empty line before request body
