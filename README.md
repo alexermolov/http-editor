@@ -57,11 +57,19 @@ The extension supports automatic authentication before sending your main request
 
 **Example:**
 
-```
+```http
 ### @PRE-AUTH
+# @responsePath data.access_token
+POST https://api.example.com/auth
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
 ```
 
-The pre-auth configuration is stored in the `.http` file with the special `### @PRE-AUTH` marker, but credentials are **never** saved to the file - they are only kept in memory during your session for security.
+The pre-auth configuration is stored in the `.http` file with the special `### @PRE-AUTH` marker, and the token extraction path is persisted as the `# @responsePath ...` comment. Credentials are **never** saved to the file—they are only kept in memory during your session for security.
 
 Use the `{{auth}}` variable in your requests' headers:
 

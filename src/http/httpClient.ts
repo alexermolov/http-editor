@@ -35,10 +35,12 @@ export class HttpClient {
      * Builds axios configuration
      */
     private buildAxiosConfig(request: HttpRequest): AxiosRequestConfig {
+        const headers = request.headers ? { ...request.headers } : {};
+        
         const config: AxiosRequestConfig = {
             method: request.method.toLowerCase(),
             url: request.url,
-            headers: request.headers || {},
+            headers: headers,
             timeout: this.timeout,
             // Disable SSL certificate verification to avoid proxy certificate issues
             httpsAgent: new https.Agent({
@@ -54,7 +56,18 @@ export class HttpClient {
 
         // Add request body for methods that support it
         if (request.body && ['POST', 'PUT', 'PATCH'].includes(request.method.toUpperCase())) {
-            config.data = this.parseRequestBody(request.body, request.bodyType);
+            const bodyData = this.parseRequestBody(request.body, request.bodyType);
+            config.data = bodyData;
+            
+            // Ensure Content-Type is set correctly for URL-encoded data
+            if (request.bodyType === 'urlencoded') {
+                const contentTypeKey = Object.keys(headers).find(
+                    key => key.toLowerCase() === 'content-type'
+                );
+                if (!contentTypeKey) {
+                    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+                }
+            }
         }
 
         return config;
@@ -75,9 +88,10 @@ export class HttpClient {
         }
 
         if (bodyType === 'urlencoded') {
-            // For URL encoded data return as is
-            // axios will handle it automatically if Content-Type is set
-            return body;
+            // For URL-encoded data, return trimmed string
+            // Axios expects a string in format: key1=value1&key2=value2
+            // The Content-Type header must be set to application/x-www-form-urlencoded
+            return body.trim();
         }
 
         // For all other types (text, xml, html, javascript) return as string

@@ -84,6 +84,19 @@ export class HttpFileParser {
         } else {
           // Обычный комментарий (# или ##)
           if (currentRequest) {
+            if (currentRequest.isPreAuthRequest) {
+              const responsePathMatch = commentText.match(/^@responsepath\s+(.+)$/i);
+              if (responsePathMatch) {
+                currentRequest.preAuth =
+                  currentRequest.preAuth || {
+                    enabled: true,
+                    curlCommand: "",
+                    responsePath: "",
+                  };
+                currentRequest.preAuth.responsePath = responsePathMatch[1].trim();
+                continue;
+              }
+            }
             // Комментарий внутри запроса - игнорируем
             continue;
           } else {
@@ -203,8 +216,13 @@ export class HttpFileParser {
     // Write requests
     for (const req of requests) {
       // Request name (use @PRE-AUTH marker if it's a pre-auth request)
-      if (req.preAuth?.enabled) {
+      const preAuthConfig = req.preAuth;
+      if (preAuthConfig?.enabled) {
         content += `### @PRE-AUTH\n`;
+        const responsePath = preAuthConfig.responsePath?.trim();
+        if (responsePath) {
+          content += `# @responsePath ${responsePath}\n`;
+        }
       } else {
         content += `### ${req.name}\n`;
       }
@@ -223,7 +241,8 @@ export class HttpFileParser {
       let bodyContent = req.body || "";
       if (
         req.isPreAuthRequest ||
-        req.name?.trim().toUpperCase() === "@PRE-AUTH"
+        req.name?.trim().toUpperCase() === "@PRE-AUTH" ||
+        req.preAuth?.enabled
       ) {
         bodyContent = this.sanitizePreAuthBody(bodyContent);
       }

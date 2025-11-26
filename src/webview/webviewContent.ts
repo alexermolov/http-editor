@@ -1172,6 +1172,8 @@ export class WebviewContentGenerator {
             password: ''
         };
 
+        hydrateGlobalPreAuthConfigFromRequests();
+
         // Initialize
         function init() {
             renderRequestList();
@@ -1278,46 +1280,22 @@ export class WebviewContentGenerator {
 
         // Auto-populate from @PRE-AUTH request
         function autoPopulateFromPreAuthRequest() {
-            // Find the @PRE-AUTH request in the list
-            const preAuthRequest = requests.find(r => r.isPreAuthRequest === true);
-            
+            const preAuthRequest = findPreAuthRequest();
             if (!preAuthRequest) {
-                return; // No @PRE-AUTH request found
+                return;
             }
 
-            // Build cURL command from the request
-            let curlCommand = \`curl -X \${preAuthRequest.method} \${preAuthRequest.url}\`;
-            
-            // Add headers
-            for (const [key, value] of Object.entries(preAuthRequest.headers)) {
-                if (key && value) {
-                    curlCommand += \` -H '\${key}: \${value}'\`;
-                }
-            }
-            
-            // Add body with placeholders for username and password
-            if (preAuthRequest.body && preAuthRequest.body.trim()) {
-                // Replace any existing credential values with placeholders
-                let body = preAuthRequest.body;
-                
-                // Try to replace common patterns for email/username and password
-                body = body.replace(/"email"\s*:\s*"[^"]*"/, '"email": "{{username}}"');
-                body = body.replace(/"username"\s*:\s*"[^"]*"/, '"username": "{{username}}"');
-                body = body.replace(/"user"\s*:\s*"[^"]*"/, '"user": "{{username}}"');
-                body = body.replace(/"password"\s*:\s*"[^"]*"/, '"password": "{{password}}"');
-                body = body.replace(/"pass"\s*:\s*"[^"]*"/, '"pass": "{{password}}"');
-                
-                curlCommand += \` -d '\${body}'\`;
-            }
+            const curlCommand = buildCurlCommandFromRequest(preAuthRequest);
 
             // Populate the fields
             document.getElementById('preAuthCurl').value = curlCommand;
             document.getElementById('preAuthUsername').value = '';
             document.getElementById('preAuthPassword').value = '';
-            document.getElementById('preAuthPath').value = '';
+            document.getElementById('preAuthPath').value = preAuthRequest.preAuth?.responsePath || '';
             
             // Update global config
             globalPreAuthConfig.curlCommand = curlCommand;
+            globalPreAuthConfig.responsePath = preAuthRequest.preAuth?.responsePath || '';
         }
 
         // Render pre-auth configuration
@@ -1333,9 +1311,9 @@ export class WebviewContentGenerator {
             }
             
             document.getElementById('preAuthCurl').value = preAuth.curlCommand;
-            document.getElementById('preAuthPath').value = preAuth.responsePath;
-            document.getElementById('preAuthUsername').value = preAuth.username;
-            document.getElementById('preAuthPassword').value = preAuth.password;
+            document.getElementById('preAuthPath').value = preAuth.responsePath || '';
+            document.getElementById('preAuthUsername').value = preAuth.username || '';
+            document.getElementById('preAuthPassword').value = preAuth.password || '';
         }
 
         // Update pre-auth configuration
@@ -1652,6 +1630,38 @@ export class WebviewContentGenerator {
 
         // Update request body type
         function updateBodyType() {
+            const request = requests.find(r => r.id === currentRequestId);
+            if (!request) return;
+            
+            const newBodyType = document.getElementById('bodyTypeSelect').value;
+            request.bodyType = newBodyType;
+            
+            // Update Content-Type header when body type changes
+            const contentTypeMap = {
+                'json': 'application/json',
+                'urlencoded': 'application/x-www-form-urlencoded',
+                'xml': 'application/xml',
+                'html': 'text/html',
+                'javascript': 'application/javascript',
+                'text': 'text/plain'
+            };
+            
+            if (contentTypeMap[newBodyType] && request.body && request.body.trim()) {
+                // Find and update existing Content-Type header (case-insensitive)
+                const contentTypeKey = Object.keys(request.headers).find(
+                    key => key.toLowerCase() === 'content-type'
+                );
+                
+                if (contentTypeKey) {
+                    request.headers[contentTypeKey] = contentTypeMap[newBodyType];
+                } else {
+                    request.headers['Content-Type'] = contentTypeMap[newBodyType];
+                }
+                
+                // Re-render headers to show updated value
+                renderRequest(request);
+            }
+            
             updateCurrentRequest();
         }
 
@@ -1891,8 +1901,66 @@ export class WebviewContentGenerator {
             
             vscode.postMessage({
                 command: 'saveRequests',
-                requests: requests
+                requests: requests,
+                preAuth: {
+                    enabled: globalPreAuthConfig.enabled,
+                    curlCommand: globalPreAuthConfig.curlCommand,
+                    responsePath: globalPreAuthConfig.responsePath
+                }
             });
+        }
+
+        function findPreAuthRequest() {
+            return requests.find(r => r.isPreAuthRequest === true || (r.name && r.name.trim().toUpperCase() === '@PRE-AUTH'));
+        }
+
+        function hydrateGlobalPreAuthConfigFromRequests() {
+            const preAuthRequest = findPreAuthRequest();
+            if (!preAuthRequest) {
+                return;
+            }
+            globalPreAuthConfig.enabled = true;
+            globalPreAuthConfig.curlCommand = buildCurlCommandFromRequest(preAuthRequest);
+            globalPreAuthConfig.responsePath = preAuthRequest.preAuth?.responsePath || '';
+        }
+
+        function buildCurlCommandFromRequest(preAuthRequest) {
+            if (!preAuthRequest) {
+                return '';
+            }
+
+            let curlCommand = \`curl -X \${preAuthRequest.method} \${preAuthRequest.url}\`;
+
+            const headers = preAuthRequest.headers || {};
+            for (const [key, value] of Object.entries(headers)) {
+                if (key && value) {
+                    curlCommand += \` -H '\${key}: \${value}'\`;
+                }
+            }
+
+            if (preAuthRequest.body && preAuthRequest.body.trim()) {
+                const sanitizedBody = replacePreAuthCredentials(preAuthRequest.body);
+                curlCommand += \` -d '\${sanitizedBody}'\`;
+            }
+
+            return curlCommand;
+        }
+
+        function replacePreAuthCredentials(body) {
+            let sanitized = body;
+            const replacements = [
+                { pattern: /"email"\s*:\s*"[^"]*"/gi, replacement: '"email": "{{username}}"' },
+                { pattern: /"username"\s*:\s*"[^"]*"/gi, replacement: '"username": "{{username}}"' },
+                { pattern: /"user"\s*:\s*"[^"]*"/gi, replacement: '"user": "{{username}}"' },
+                { pattern: /"password"\s*:\s*"[^"]*"/gi, replacement: '"password": "{{password}}"' },
+                { pattern: /"pass"\s*:\s*"[^"]*"/gi, replacement: '"pass": "{{password}}"' }
+            ];
+
+            replacements.forEach(({ pattern, replacement }) => {
+                sanitized = sanitized.replace(pattern, replacement);
+            });
+
+            return sanitized;
         }
 
         // Switch tabs

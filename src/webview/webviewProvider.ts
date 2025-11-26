@@ -169,7 +169,9 @@ export class HttpEditorWebviewProvider {
         }
 
         try {
-            const content = this.parser.serialize(message.requests);
+            const requestsToSave = this.prepareRequestsForSave(message);
+            this.ensureCredentialVariables(requestsToSave);
+            const content = this.parser.serialize(requestsToSave);
             fs.writeFileSync(this.fileUri.fsPath, content, 'utf8');
 
             vscode.window.showInformationMessage('Requests saved successfully');
@@ -185,6 +187,70 @@ export class HttpEditorWebviewProvider {
                 command: 'saveComplete',
                 success: false
             });
+        }
+    }
+
+    private prepareRequestsForSave(message: SaveRequestsMessage): HttpRequest[] {
+        const nonPreAuthRequests = message.requests.filter(req => {
+            const name = req.name ? req.name.trim().toUpperCase() : '';
+            return !req.isPreAuthRequest && name !== '@PRE-AUTH';
+        });
+
+        const preAuthConfig = message.preAuth;
+        if (preAuthConfig?.enabled && preAuthConfig.curlCommand?.trim()) {
+            try {
+                const parsedPreAuth = this.importParser.parseCurl(preAuthConfig.curlCommand.trim());
+                parsedPreAuth.name = '@PRE-AUTH';
+                parsedPreAuth.isPreAuthRequest = true;
+                parsedPreAuth.preAuth = {
+                    enabled: true,
+                    curlCommand: '',
+                    responsePath: preAuthConfig.responsePath?.trim() || ''
+                };
+                nonPreAuthRequests.unshift(parsedPreAuth);
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                throw new Error(`Failed to parse pre-auth cURL command: ${errorMessage}`);
+            }
+        }
+
+        return nonPreAuthRequests;
+    }
+
+    private ensureCredentialVariables(requests: HttpRequest[]): void {
+        if (!requests.length) {
+            return;
+        }
+
+        const aggregatedVariables: Record<string, string> = {};
+        for (const req of requests) {
+            if (!req.variables) {
+                continue;
+            }
+            for (const [name, value] of Object.entries(req.variables)) {
+                if (!(name in aggregatedVariables)) {
+                    aggregatedVariables[name] = value;
+                }
+            }
+        }
+
+        let hasChanges = false;
+        for (const variableName of ['username', 'password']) {
+            if (!(variableName in aggregatedVariables)) {
+                aggregatedVariables[variableName] = '';
+                hasChanges = true;
+            }
+        }
+
+        if (!hasChanges) {
+            return;
+        }
+
+        for (const req of requests) {
+            req.variables = {
+                ...aggregatedVariables,
+                ...(req.variables || {})
+            };
         }
     }
 

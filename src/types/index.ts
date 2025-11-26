@@ -81,6 +81,7 @@ export interface SendRequestMessage extends Message {
 export interface SaveRequestsMessage extends Message {
     command: 'saveRequests';
     requests: HttpRequest[];
+    preAuth?: PreAuthConfig;
 }
 
 export interface RequestCompleteMessage extends Message {
