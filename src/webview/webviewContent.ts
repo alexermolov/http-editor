@@ -1940,7 +1940,13 @@ export class WebviewContentGenerator {
 
             if (preAuthRequest.body && preAuthRequest.body.trim()) {
                 const sanitizedBody = replacePreAuthCredentials(preAuthRequest.body);
-                curlCommand += \` -d '\${sanitizedBody}'\`;
+                // Escape single quotes and replace actual newlines with literal \n for curl command
+                const escapedBody = sanitizedBody
+                    .replace(/'/g, "'\\\\''")
+                    .replace(/\\r\\n/g, '\\\\n')
+                    .replace(/\\n/g, '\\\\n')
+                    .replace(/\\r/g, '');
+                curlCommand += \` -d '\${escapedBody}'\`;
             }
 
             return curlCommand;
@@ -1948,6 +1954,8 @@ export class WebviewContentGenerator {
 
         function replacePreAuthCredentials(body) {
             let sanitized = body;
+            
+            // JSON format replacements
             const replacements = [
                 { pattern: /"email"\s*:\s*"[^"]*"/gi, replacement: '"email": "{{username}}"' },
                 { pattern: /"username"\s*:\s*"[^"]*"/gi, replacement: '"username": "{{username}}"' },
@@ -1959,6 +1967,10 @@ export class WebviewContentGenerator {
             replacements.forEach(({ pattern, replacement }) => {
                 sanitized = sanitized.replace(pattern, replacement);
             });
+
+            // URL-encoded form data replacements
+            sanitized = sanitized.replace(/\b(username|email|user)=([^&\s]*)/gi, '$1={{username}}');
+            sanitized = sanitized.replace(/\b(password|pass)=([^&\s]*)/gi, '$1={{password}}');
 
             return sanitized;
         }

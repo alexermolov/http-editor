@@ -1,4 +1,5 @@
 import { HttpRequest, HttpMethod } from "../types";
+import parseCurl from "parse-curl";
 
 /**
  * Postman Collection interfaces
@@ -233,143 +234,34 @@ export class ImportParser {
    * Parse cURL command
    */
   public parseCurl(curlCommand: string): HttpRequest {
-    const request: HttpRequest = {
-      id: `${Date.now()}-${++this.requestCounter}`,
-      name: "Imported from cURL",
-      method: "GET",
-      url: "",
-      headers: {},
-      body: "",
-      bodyType: "text",
-    };
+    try {
+      const parsed = parseCurl(curlCommand);
 
-    // Remove curl prefix, collapse line continuations, and normalize whitespace
-    let cmd = curlCommand
-      .trim()
-      .replace(/^curl\s+/i, "")
-      .replace(/\\\s*\n/g, " ");
+      // Convert parsed result to HttpRequest
+      const request: HttpRequest = {
+        id: `${Date.now()}-${++this.requestCounter}`,
+        name: "Imported from cURL",
+        method: (parsed.method || "GET").toUpperCase() as HttpMethod,
+        url: parsed.url || "",
+        headers: parsed.header || {},
+        body: parsed.body || "",
+        bodyType: "text",
+      };
 
-    // Extract method first
-    const methodMatch = cmd.match(/(?:-X|--request)\s+([A-Z]+)/i);
-    if (methodMatch) {
-      request.method = methodMatch[1].toUpperCase() as HttpMethod;
-    }
-
-    // Extract URL (match http/https URL, but skip if it's part of a method flag)
-    // First try to find URL after method flag, then look for standalone URL
-    const urlMatch =
-      cmd.match(/(?:-X|--request)\s+[A-Z]+\s+['""]?(https?:\/\/[^\s'"]+)/i) ||
-      cmd.match(/(?:^|\s)(?!-)['""]?(https?:\/\/[^\s'"]+)/i) ||
-      cmd.match(/(?:-L|--location)\s+['""]?([^'""]+)/i);
-    if (urlMatch) {
-      request.url = urlMatch[1].replace(/['"]/g, "");
-    }
-
-    // Extract headers
-    const headerRegex = /(?:-H|--header)\s+['"](.*?)['"]/gi;
-    let headerMatch;
-    while ((headerMatch = headerRegex.exec(cmd)) !== null) {
-      const headerLine = headerMatch[1];
-      const colonIndex = headerLine.indexOf(":");
-      if (colonIndex > 0) {
-        const key = headerLine.substring(0, colonIndex).trim();
-        let value = headerLine.substring(colonIndex + 1).trim();
-        // Remove surrounding quotes from value if present
-        if (
-          (value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))
-        ) {
-          value = value.slice(1, -1);
-        }
-        // Skip empty quoted values like ""
-        if (value !== "") {
-          request.headers[key] = value;
-        }
+      // Detect body type from content and headers
+      if (request.body) {
+        request.bodyType = this.detectBodyType(
+          request.body,
+          request.headers["Content-Type"] || request.headers["content-type"]
+        );
       }
-    }
 
-    // Extract body data (supports multiple -d/--data* occurrences including --data-urlencode)
-    const dataRegex =
-      /((?:-d|--data(?:-raw|-binary|-urlencode)?))\s+(?:'([\s\S]*?)'|"([\s\S]*?)"|([^\s"']+))/gi;
-    const dataSegments: Array<{ flag: string; value: string }> = [];
-    let dataMatch;
-    while ((dataMatch = dataRegex.exec(cmd)) !== null) {
-      const flag = dataMatch[1].toLowerCase();
-      const value = dataMatch[2] ?? dataMatch[3] ?? dataMatch[4] ?? "";
-      dataSegments.push({ flag, value });
-    }
-
-    if (dataSegments.length > 0) {
-      const isUrlEncoded =
-        dataSegments.some((segment) => segment.flag === "--data-urlencode") ||
-        this.isUrlEncodedFromHeaders(request.headers);
-      const parts = dataSegments.map((segment) =>
-        this.normalizeCurlDataValue(segment.value, segment.flag, isUrlEncoded)
-      );
-      request.body = isUrlEncoded ? parts.join("&") : parts.join("\n");
-      request.bodyType = this.detectBodyType(
-        request.body,
-        request.headers["Content-Type"] || request.headers["content-type"]
+      return request;
+    } catch (error) {
+      throw new Error(
+        `Failed to parse cURL command: ${error instanceof Error ? error.message : "Unknown error"}`
       );
     }
-
-    return request;
-  }
-
-  private isUrlEncodedFromHeaders(headers: Record<string, string>): boolean {
-    const contentType = headers["Content-Type"] || headers["content-type"];
-    return Boolean(
-      contentType &&
-        contentType.toLowerCase().includes("application/x-www-form-urlencoded")
-    );
-  }
-
-  private normalizeCurlDataValue(
-    value: string,
-    flag: string,
-    fallbackUrlEncoded: boolean
-  ): string {
-    if (flag === "--data-urlencode") {
-      const trimmed = value.trim();
-      if (trimmed.includes("=")) {
-        const [key, ...rest] = trimmed.split("=");
-        const rawVal = rest.join("=");
-        return `${encodeURIComponent(key)}=${this.encodePreservingPlaceholders(
-          rawVal
-        )}`;
-      }
-      return this.encodePreservingPlaceholders(trimmed);
-    }
-
-    if (fallbackUrlEncoded) {
-      // Preserve raw key/value pairs when the header enforces URL-encoded bodies
-      return value.trim();
-    }
-
-    return value;
-  }
-
-  private encodePreservingPlaceholders(value: string): string {
-    const tokenRegex = /{{[^{}]+}}/g;
-    let lastIndex = 0;
-    let result = "";
-    let match: RegExpExecArray | null;
-
-    while ((match = tokenRegex.exec(value)) !== null) {
-      const before = value.slice(lastIndex, match.index);
-      if (before) {
-        result += encodeURIComponent(before);
-      }
-      result += match[0];
-      lastIndex = match.index + match[0].length;
-    }
-
-    const remaining = value.slice(lastIndex);
-    if (remaining) {
-      result += encodeURIComponent(remaining);
-    }
-
-    return result;
   }
 
   /**
