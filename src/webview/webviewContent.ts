@@ -1905,7 +1905,9 @@ export class WebviewContentGenerator {
                 preAuth: {
                     enabled: globalPreAuthConfig.enabled,
                     curlCommand: globalPreAuthConfig.curlCommand,
-                    responsePath: globalPreAuthConfig.responsePath
+                    responsePath: globalPreAuthConfig.responsePath,
+                    username: globalPreAuthConfig.username,
+                    password: globalPreAuthConfig.password
                 }
             });
         }
@@ -1940,13 +1942,9 @@ export class WebviewContentGenerator {
 
             if (preAuthRequest.body && preAuthRequest.body.trim()) {
                 const sanitizedBody = replacePreAuthCredentials(preAuthRequest.body);
-                // Escape single quotes and replace actual newlines with literal \n for curl command
-                const escapedBody = sanitizedBody
-                    .replace(/'/g, "'\\\\''")
-                    .replace(/\\r\\n/g, '\\\\n')
-                    .replace(/\\n/g, '\\\\n')
-                    .replace(/\\r/g, '');
-                curlCommand += \` -d '\${escapedBody}'\`;
+                // Remove all newlines and extra whitespace from body
+                const cleanBody = sanitizedBody.replace(/\\r?\\n|\\r/g, '').replace(/\\s+/g, ' ').trim();
+                curlCommand += \` -d '\${cleanBody}'\`;
             }
 
             return curlCommand;
