@@ -328,20 +328,11 @@ export class HttpEditorWebviewProvider {
             // Parse the cURL command
             let curlCommand = preAuth.curlCommand;
             
-            // Replace variables from request context
-            if (message.variables) {
-                Object.entries(message.variables).forEach(([name, value]) => {
-                    const pattern = new RegExp(`\\{\\{\\s*${name}\\s*\\}\\}`, 'g');
-                    curlCommand = curlCommand.replace(pattern, value);
-                });
-            }
-            
-            // Replace username and password placeholders
-            // Use form fields first, fallback to variables 'login' and 'password'
-            // Filter out empty strings from variables
-            const loginVar = message.variables?.['login'];
+            // Replace username and password placeholders FIRST
+            // Use form fields first, fallback to variables 'username' and 'password'
+            const usernameVar = message.variables?.['username'];
             const passwordVar = message.variables?.['password'];
-            const username = preAuth.username || (loginVar && loginVar.trim() ? loginVar : '');
+            const username = preAuth.username || (usernameVar && usernameVar.trim() ? usernameVar : '');
             const password = preAuth.password || (passwordVar && passwordVar.trim() ? passwordVar : '');
             
             if (username) {
@@ -351,7 +342,22 @@ export class HttpEditorWebviewProvider {
                 curlCommand = curlCommand.replace(/\{\{password\}\}/g, password);
             }
             
-            console.log('Pre-auth: Parsed cURL command:', curlCommand);
+            // Replace OTHER variables from request context (excluding username and password)
+            if (message.variables) {
+                Object.entries(message.variables).forEach(([name, value]) => {
+                    // Skip username and password as they are already processed
+                    if (name === 'username' || name === 'password') {
+                        return;
+                    }
+                    // Only replace if value is not empty
+                    if (value && value.trim()) {
+                        const pattern = new RegExp(`\\{\\{\\s*${name}\\s*\\}\\}`, 'g');
+                        curlCommand = curlCommand.replace(pattern, value);
+                    }
+                });
+            }
+            
+            console.log('Pre-auth: Final cURL command after variable substitution:', curlCommand);
             
             // Parse cURL to HttpRequest
             const authRequest = this.importParser.parseCurl(curlCommand);
@@ -364,6 +370,8 @@ export class HttpEditorWebviewProvider {
                 body: authRequest.body,
                 bodyType: authRequest.bodyType
             });
+            
+            console.log('Pre-auth: Full auth request details:', JSON.stringify(authRequest, null, 2));
             
             // Execute the auth request
             const response = await this.httpClient.send(authRequest);
