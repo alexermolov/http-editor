@@ -130,9 +130,12 @@ export class HttpFileParser {
 
         // Парсим метод и URL, если они ещё не установлены
         if (!currentRequest.url) {
-          const { method, url } = this.parseMethodLine(line);
+          const { method, url, queryParams } = this.parseMethodLine(line);
           currentRequest.method = method;
           currentRequest.url = url;
+          if (queryParams && queryParams.length > 0) {
+            currentRequest.queryParams = queryParams;
+          }
           // Set name from URL if not already set
           if (!currentRequest.name) {
             currentRequest.name = this.extractRouteFromUrl(url, method) || url;
@@ -191,6 +194,39 @@ export class HttpFileParser {
   }
 
   /**
+   * Smart encode URI component that preserves variable templates
+   */
+  private smartEncodeURIComponent(str: string): string {
+    if (!str) return '';
+    
+    // Replace variable templates with placeholders
+    const variablePattern = /\{\{\s*\w+\s*\}\}/g;
+    const variables: string[] = [];
+    let tempStr = str;
+    
+    // Extract and store variable templates
+    let match;
+    while ((match = variablePattern.exec(str)) !== null) {
+      variables.push(match[0]);
+    }
+    
+    // Replace variables with unique placeholders
+    variables.forEach((variable, index) => {
+      tempStr = tempStr.replace(variable, `__VAR_${index}__`);
+    });
+    
+    // Encode the string
+    let encoded = encodeURIComponent(tempStr);
+    
+    // Restore variables
+    variables.forEach((variable, index) => {
+      encoded = encoded.replace(`__VAR_${index}__`, variable);
+    });
+    
+    return encoded;
+  }
+
+  /**
    * Serializes requests back to .http file format
    */
   public serialize(requests: HttpRequest[]): string {
@@ -227,8 +263,18 @@ export class HttpFileParser {
         content += `### ${req.name}\n`;
       }
 
-      // Method and URL
-      content += `${req.method} ${req.url}\n`;
+      // Method and URL with query params
+      let fullUrl = req.url;
+      if (req.queryParams && req.queryParams.length > 0) {
+        const enabledParams = req.queryParams.filter(p => p.enabled);
+        if (enabledParams.length > 0) {
+          const queryString = enabledParams
+            .map(p => `${this.smartEncodeURIComponent(p.key)}=${this.smartEncodeURIComponent(p.value)}`)
+            .join('&');
+          fullUrl = `${req.url}?${queryString}`;
+        }
+      }
+      content += `${req.method} ${fullUrl}\n`;
 
       // Headers
       for (const [key, value] of Object.entries(req.headers)) {
@@ -266,11 +312,47 @@ export class HttpFileParser {
   /**
    * Parses method and URL line
    */
-  private parseMethodLine(line: string): { method: HttpMethod; url: string } {
+  private parseMethodLine(line: string): { method: HttpMethod; url: string; queryParams?: import("../types").QueryParam[] } {
     const parts = line.split(/\s+/);
+    const fullUrl = parts[1] || "";
+    
+    // Extract query params from URL
+    const queryParams: import("../types").QueryParam[] = [];
+    let baseUrl = fullUrl;
+    
+    const questionMarkIndex = fullUrl.indexOf('?');
+    if (questionMarkIndex !== -1) {
+      baseUrl = fullUrl.substring(0, questionMarkIndex);
+      const queryString = fullUrl.substring(questionMarkIndex + 1);
+      
+      if (queryString) {
+        const pairs = queryString.split('&');
+        pairs.forEach(pair => {
+          const equalIndex = pair.indexOf('=');
+          if (equalIndex !== -1) {
+            const key = decodeURIComponent(pair.substring(0, equalIndex));
+            const value = decodeURIComponent(pair.substring(equalIndex + 1));
+            queryParams.push({
+              key: key,
+              value: value,
+              enabled: true
+            });
+          } else if (pair) {
+            // Parameter without value
+            queryParams.push({
+              key: decodeURIComponent(pair),
+              value: '',
+              enabled: true
+            });
+          }
+        });
+      }
+    }
+    
     return {
       method: parts[0].toUpperCase() as HttpMethod,
-      url: parts[1] || "",
+      url: baseUrl,
+      queryParams: queryParams.length > 0 ? queryParams : undefined,
     };
   }
 
@@ -356,6 +438,7 @@ export class HttpFileParser {
       method: request.method || "GET",
       url: request.url || "",
       headers: request.headers || {},
+      queryParams: request.queryParams || [],
       body: request.body || "",
       bodyType: request.bodyType || "text",
       variables: globalVariables,
@@ -374,6 +457,7 @@ export class HttpFileParser {
       method: "GET",
       url: "https://api.example.com",
       headers: {},
+      queryParams: [],
       body: "",
       bodyType: "text",
     };

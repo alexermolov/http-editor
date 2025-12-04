@@ -137,6 +137,7 @@ export class WebviewContentGenerator {
                         <p>Use variables in requests with the format: <code>{{variableName}}</code></p>
                     </div>
                     <div class="variables-editor" id="variablesEditor"></div>
+                    <button class="btn-add-header" onclick="addVariableRow()">+ Add Variable</button>
                 </div>
 
                 <div class="tab-content" id="response-tab">
@@ -693,28 +694,51 @@ export class WebviewContentGenerator {
         }
 
         .variable-row {
-            background-color: var(--vscode-input-background);
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid var(--vscode-input-border);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 4px 0;
         }
 
-        .variable-row .variable-name {
+        .variable-prefix {
             font-weight: 600;
             color: var(--vscode-symbolIcon-variableForeground, #4FC1FF);
-            flex: 0 0 200px;
+            font-size: 14px;
         }
 
-        .variable-row .variable-value {
-            flex: 1;
-            color: var(--vscode-foreground);
-            word-break: break-all;
-        }
-
-        .variable-usage {
-            font-size: 11px;
+        .variable-equals {
             color: var(--vscode-descriptionForeground);
-            margin-top: 4px;
+            font-size: 14px;
+        }
+
+        .variable-name-input {
+            flex: 0 0 200px;
+            padding: 6px 8px;
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            font-size: 13px;
+        }
+
+        .variable-name-input:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            border-color: var(--vscode-focusBorder);
+        }
+
+        .variable-value-input {
+            flex: 1;
+            padding: 6px 8px;
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            font-size: 13px;
+        }
+
+        .variable-value-input:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            border-color: var(--vscode-focusBorder);
         }
 
         .query-param-row input[type="checkbox"] {
@@ -1211,7 +1235,6 @@ export class WebviewContentGenerator {
             // Update UI
             document.getElementById('requestName').value = request.name;
             document.getElementById('methodSelect').value = request.method;
-            document.getElementById('urlInput').value = request.url;
             document.getElementById('bodyInput').value = request.body || '';
             document.getElementById('bodyTypeSelect').value = request.bodyType || 'text';
 
@@ -1219,6 +1242,19 @@ export class WebviewContentGenerator {
             if (!request.queryParams) {
                 request.queryParams = [];
             }
+
+            // Build full URL with query params for display
+            let displayUrl = request.url;
+            if (request.queryParams && request.queryParams.length > 0) {
+                const enabledParams = request.queryParams.filter(p => p.enabled);
+                if (enabledParams.length > 0) {
+                    const queryString = enabledParams
+                        .map(p => \`\${smartEncodeURIComponent(p.key)}=\${smartEncodeURIComponent(p.value)}\`)
+                        .join('&');
+                    displayUrl = \`\${request.url}?\${queryString}\`;
+                }
+            }
+            document.getElementById('urlInput').value = displayUrl;
 
             // Render query params
             renderQueryParams(request.queryParams);
@@ -1389,27 +1425,30 @@ export class WebviewContentGenerator {
 
             const varEntries = Object.entries(variables);
             
-            if (varEntries.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>No variables defined. Add variables in the .http file using @variableName = value</p></div>';
-                return;
-            }
-
             varEntries.forEach(([name, value]) => {
-                const row = document.createElement('div');
-                row.className = 'variable-row';
-                
-                // Find variable usage in current request
-                const request = requests.find(r => r.id === currentRequestId);
-                const usageCount = countVariableUsage(request, name);
-                const usageText = usageCount > 0 ? \`Used \${usageCount} time(s) in this request\` : 'Not used in this request';
-                
-                row.innerHTML = \`
-                    <div class="variable-name">@\${escapeHtml(name)}</div>
-                    <div class="variable-value">\${escapeHtml(value)}</div>
-                    <div class="variable-usage">\${usageText}</div>
-                \`;
-                container.appendChild(row);
+                addVariableRow(name, value);
             });
+
+            // Add empty row for new variable
+            if (varEntries.length === 0) {
+                addVariableRow();
+            }
+        }
+
+        // Add variable row
+        function addVariableRow(name = '', value = '') {
+            const container = document.getElementById('variablesEditor');
+            const row = document.createElement('div');
+            row.className = 'variable-row';
+            
+            row.innerHTML = \`
+                <span class="variable-prefix">@</span>
+                <input type="text" class="variable-name-input" placeholder="variableName" value="\${escapeHtml(name)}" onchange="updateCurrentRequest()">
+                <span class="variable-equals">=</span>
+                <input type="text" class="variable-value-input" placeholder="value" value="\${escapeHtml(value)}" onchange="updateCurrentRequest()">
+                <button class="btn-remove-header" onclick="this.parentElement.remove(); updateCurrentRequest();">✕</button>
+            \`;
+            container.appendChild(row);
         }
 
         // Count variable usage in request
@@ -1483,6 +1522,26 @@ export class WebviewContentGenerator {
             });
             request.headers = headers;
 
+            // Collect variables
+            const variables = {};
+            document.querySelectorAll('#variablesEditor .variable-row').forEach(row => {
+                const nameInput = row.querySelector('.variable-name-input');
+                const valueInput = row.querySelector('.variable-value-input');
+                if (nameInput && valueInput) {
+                    const name = nameInput.value.trim();
+                    const value = valueInput.value.trim();
+                    if (name) {
+                        variables[name] = value;
+                    }
+                }
+            });
+            request.variables = variables;
+
+            // Update variables for all requests (they are global)
+            requests.forEach(req => {
+                req.variables = variables;
+            });
+
             // Build URL with query params
             request.url = buildUrlWithQueryParams();
 
@@ -1496,6 +1555,37 @@ export class WebviewContentGenerator {
             updateUrlPreview();
 
             renderRequestList();
+        }
+
+        // Smart encode URI component that preserves variable templates
+        function smartEncodeURIComponent(str) {
+            if (!str) return '';
+            
+            // Replace variable templates with placeholders
+            const variablePattern = /\\{\\{\\s*\\w+\\s*\\}\\}/g;
+            const variables = [];
+            let tempStr = str;
+            
+            // Extract and store variable templates
+            let match;
+            while ((match = variablePattern.exec(str)) !== null) {
+                variables.push(match[0]);
+            }
+            
+            // Replace variables with unique placeholders
+            variables.forEach((variable, index) => {
+                tempStr = tempStr.replace(variable, '__VAR_' + index + '__');
+            });
+            
+            // Encode the string
+            let encoded = encodeURIComponent(tempStr);
+            
+            // Restore variables
+            variables.forEach((variable, index) => {
+                encoded = encoded.replace('__VAR_' + index + '__', variable);
+            });
+            
+            return encoded;
         }
 
         // Build URL with query params
@@ -1526,7 +1616,7 @@ export class WebviewContentGenerator {
             }
 
             const queryString = queryParams
-                .map(p => \`\${encodeURIComponent(p.key)}=\${encodeURIComponent(p.value)}\`)
+                .map(p => \`\${smartEncodeURIComponent(p.key)}=\${smartEncodeURIComponent(p.value)}\`)
                 .join('&');
 
             return \`\${baseUrl}?\${queryString}\`;
