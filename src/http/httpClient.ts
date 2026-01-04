@@ -8,9 +8,19 @@ import { HttpRequest, HttpResponse } from '../types';
  */
 export class HttpClient {
     private readonly timeout: number;
+    private locale: string = '';
+    private timezone: string = '';
 
     constructor(timeout: number = 30000) {
         this.timeout = timeout;
+    }
+
+    /**
+     * Sets locale and timezone for requests
+     */
+    public setLocale(locale: string, timezone: string): void {
+        this.locale = locale;
+        this.timezone = timezone;
     }
 
     /**
@@ -36,6 +46,14 @@ export class HttpClient {
      */
     private buildAxiosConfig(request: HttpRequest): AxiosRequestConfig {
         const headers = request.headers ? { ...request.headers } : {};
+        
+        // Add locale and timezone headers if set
+        if (this.locale) {
+            headers['Accept-Language'] = this.locale;
+        }
+        if (this.timezone) {
+            headers['X-Timezone'] = this.timezone;
+        }
         
         const config: AxiosRequestConfig = {
             method: request.method.toLowerCase(),

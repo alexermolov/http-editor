@@ -110,3 +110,67 @@ export interface ExecutePreAuthMessage extends Message {
     variables?: Record<string, string>;
     requestId: number | string;
 }
+
+/**
+ * Environment configuration
+ */
+export interface Environment {
+    name: string;
+    variables: Record<string, string>;
+}
+
+/**
+ * User profile for testing with multiple accounts
+ */
+export interface UserProfile {
+    name: string;
+    username?: string;
+    password?: string;
+    token?: string;
+    variables?: Record<string, string>;
+}
+
+/**
+ * Locale and timezone settings
+ */
+export interface LocaleSettings {
+    locale: string;
+    timezone: string;
+}
+
+/**
+ * Extension configuration
+ */
+export interface ExtensionConfig {
+    environments: Environment[];
+    users: UserProfile[];
+    locales: LocaleSettings[];
+    defaultEnvironment?: string;
+    defaultUser?: string;
+    defaultLocale?: string;
+}
+
+/**
+ * Message for changing environment
+ */
+export interface ChangeEnvironmentMessage extends Message {
+    command: 'changeEnvironment';
+    environment: string;
+}
+
+/**
+ * Message for changing user profile
+ */
+export interface ChangeUserMessage extends Message {
+    command: 'changeUser';
+    user: string;
+}
+
+/**
+ * Message for changing locale settings
+ */
+export interface ChangeLocaleMessage extends Message {
+    command: 'changeLocale';
+    locale: string;
+    timezone: string;
+}

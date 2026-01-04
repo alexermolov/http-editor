@@ -48,6 +48,10 @@
       {
         "command": "httpEditor.openEditor",
         "title": "Open with HTTP Editor"
+      },
+      {
+        "command": "httpEditor.createConfig",
+        "title": "HTTP Editor: Create Example Config File"
       }
     ],
     "menus": {
@@ -65,6 +69,26 @@
           "group": "navigation"
         }
       ]
+    },
+    "configuration": {
+      "title": "HTTP Editor",
+      "properties": {
+        "httpEditor.defaultEnvironment": {
+          "type": "string",
+          "default": "",
+          "description": "Default environment to use when opening HTTP files"
+        },
+        "httpEditor.defaultUser": {
+          "type": "string",
+          "default": "",
+          "description": "Default user profile to use when opening HTTP files"
+        },
+        "httpEditor.defaultLocale": {
+          "type": "string",
+          "default": "en-US",
+          "description": "Default locale for requests"
+        }
+      }
     }
   },
   "scripts": {

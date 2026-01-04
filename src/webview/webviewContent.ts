@@ -1,4 +1,4 @@
-import { HttpRequest } from "../types";
+import { HttpRequest, ExtensionConfig } from "../types";
 
 /**
  * HTML content generator for WebView
@@ -7,8 +7,9 @@ export class WebviewContentGenerator {
   /**
    * Generates HTML content for WebView
    */
-  public generate(requests: HttpRequest[], filePath: string): string {
+  public generate(requests: HttpRequest[], filePath: string, config?: ExtensionConfig): string {
     const requestsJson = JSON.stringify(requests);
+    const configJson = JSON.stringify(config || null);
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -29,6 +30,29 @@ export class WebviewContentGenerator {
                 <div class="sidebar-title">Requests</div>
                 <button class="btn-add" onclick="addNewRequest()">+ New</button>
             </div>
+            
+            <!-- Environment & Config Selectors -->
+            <div class="config-selectors" id="configSelectors" style="display: none;">
+                <div class="form-group-compact">
+                    <label class="form-label-compact">Environment:</label>
+                    <select id="environmentSelect" onchange="changeEnvironment(this.value)">
+                        <option value="">No Environment</option>
+                    </select>
+                </div>
+                <div class="form-group-compact">
+                    <label class="form-label-compact">User:</label>
+                    <select id="userSelect" onchange="changeUser(this.value)">
+                        <option value="">No User</option>
+                    </select>
+                </div>
+                <div class="form-group-compact">
+                    <label class="form-label-compact">Locale:</label>
+                    <select id="localeSelect" onchange="changeLocale()">
+                        <option value="">Default</option>
+                    </select>
+                </div>
+            </div>
+            
             <div class="request-list" id="requestList"></div>
         </div>
 
@@ -184,7 +208,7 @@ export class WebviewContentGenerator {
         </div>
     </div>
 
-    ${this.generateScript(requestsJson)}
+    ${this.generateScript(requestsJson, configJson)}
 </body>
 </html>`;
   }
@@ -250,6 +274,44 @@ export class WebviewContentGenerator {
 
         .btn-add:hover {
             background-color: var(--vscode-button-hoverBackground);
+        }
+
+        .config-selectors {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--vscode-sideBar-border);
+            background-color: var(--vscode-sideBar-background);
+        }
+
+        .form-group-compact {
+            margin-bottom: 10px;
+        }
+
+        .form-group-compact:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-label-compact {
+            display: block;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 4px;
+        }
+
+        .config-selectors select {
+            width: 100%;
+            padding: 5px 8px;
+            border: 1px solid var(--vscode-input-border);
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border-radius: 3px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .config-selectors select:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            outline-offset: -1px;
         }
 
         .request-list {
@@ -1179,13 +1241,20 @@ export class WebviewContentGenerator {
   /**
    * Generates JavaScript code
    */
-  private generateScript(requestsJson: string): string {
+  private generateScript(requestsJson: string, configJson: string): string {
     return `<script>
         const vscode = acquireVsCodeApi();
         
         let requests = ${requestsJson};
         let currentRequestId = requests.length > 0 ? requests[0].id : null;
         let lastResponse = null;
+        
+        // Configuration state
+        let config = null;
+        let selectedEnvironment = '';
+        let selectedUser = '';
+        let selectedLocale = '';
+        let selectedTimezone = '';
         
         // Global pre-auth configuration (shared across all requests)
         let globalPreAuthConfig = {
@@ -1204,6 +1273,113 @@ export class WebviewContentGenerator {
             if (currentRequestId) {
                 selectRequest(currentRequestId);
             }
+        }
+
+        // Initialize config UI
+        function initConfig(configData) {
+            config = configData;
+            
+            if (!config || (!config.environments || config.environments.length === 0) &&
+                (!config.users || config.users.length === 0) &&
+                (!config.locales || config.locales.length === 0)) {
+                // Hide config selectors if no config
+                document.getElementById('configSelectors').style.display = 'none';
+                return;
+            }
+            
+            // Show config selectors
+            document.getElementById('configSelectors').style.display = 'block';
+            
+            // Populate environment selector
+            const envSelect = document.getElementById('environmentSelect');
+            envSelect.innerHTML = '<option value="">No Environment</option>';
+            if (config.environments) {
+                config.environments.forEach(env => {
+                    const option = document.createElement('option');
+                    option.value = env.name;
+                    option.textContent = env.name;
+                    envSelect.appendChild(option);
+                });
+            }
+            if (config.defaultEnvironment) {
+                envSelect.value = config.defaultEnvironment;
+                selectedEnvironment = config.defaultEnvironment;
+            }
+            
+            // Populate user selector
+            const userSelect = document.getElementById('userSelect');
+            userSelect.innerHTML = '<option value="">No User</option>';
+            if (config.users) {
+                config.users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.name;
+                    option.textContent = user.name;
+                    userSelect.appendChild(option);
+                });
+            }
+            if (config.defaultUser) {
+                userSelect.value = config.defaultUser;
+                selectedUser = config.defaultUser;
+            }
+            
+            // Populate locale selector
+            const localeSelect = document.getElementById('localeSelect');
+            localeSelect.innerHTML = '<option value="">Default</option>';
+            if (config.locales) {
+                config.locales.forEach(locale => {
+                    const option = document.createElement('option');
+                    option.value = locale.locale;
+                    option.textContent = \`\${locale.locale} (\${locale.timezone})\`;
+                    localeSelect.appendChild(option);
+                });
+            }
+            if (config.defaultLocale) {
+                localeSelect.value = config.defaultLocale;
+                selectedLocale = config.defaultLocale;
+                // Find timezone for default locale
+                const localeObj = config.locales.find(l => l.locale === config.defaultLocale);
+                if (localeObj) {
+                    selectedTimezone = localeObj.timezone;
+                }
+            }
+        }
+
+        // Change environment
+        function changeEnvironment(envName) {
+            selectedEnvironment = envName;
+            vscode.postMessage({
+                command: 'changeEnvironment',
+                environment: envName
+            });
+        }
+
+        // Change user
+        function changeUser(userName) {
+            selectedUser = userName;
+            vscode.postMessage({
+                command: 'changeUser',
+                user: userName
+            });
+        }
+
+        // Change locale
+        function changeLocale() {
+            const localeSelect = document.getElementById('localeSelect');
+            selectedLocale = localeSelect.value;
+            
+            // Find timezone for selected locale
+            if (config && config.locales) {
+                const localeObj = config.locales.find(l => l.locale === selectedLocale);
+                if (localeObj) {
+                    selectedTimezone = localeObj.timezone;
+                }
+            }
+            
+            vscode.postMessage({
+                command: 'changeLocale',
+                locale: selectedLocale,
+                timezone: selectedTimezone
+            });
         }
 
         // Render request list
@@ -2353,6 +2529,8 @@ export class WebviewContentGenerator {
         });
 
         // Initialize on load
+        const initialConfig = ${configJson};
+        initConfig(initialConfig);
         init();
     </script>`;
   }

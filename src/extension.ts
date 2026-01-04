@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { HttpEditorWebviewProvider } from './webview/webviewProvider';
+import { ConfigManager } from './config/configManager';
 
 /**
  * Extension activation
@@ -12,6 +13,7 @@ export function activate(context: vscode.ExtensionContext): void {
         console.log('HTTP Editor extension is activating...');
         
         const webviewProvider = new HttpEditorWebviewProvider(context);
+        const configManager = new ConfigManager();
 
         // Register editor command
         const openEditorCommand = vscode.commands.registerCommand(
@@ -39,7 +41,21 @@ export function activate(context: vscode.ExtensionContext): void {
             }
         );
 
+        // Register create config command
+        const createConfigCommand = vscode.commands.registerCommand(
+            'httpEditor.createConfig',
+            async () => {
+                try {
+                    await configManager.createExampleConfig();
+                } catch (error) {
+                    console.error('HTTP Editor: Error creating config', error);
+                    vscode.window.showErrorMessage(`Failed to create config: ${error}`);
+                }
+            }
+        );
+
         context.subscriptions.push(openEditorCommand);
+        context.subscriptions.push(createConfigCommand);
         context.subscriptions.push(webviewProvider);
         
         console.log('HTTP Editor extension is now active');

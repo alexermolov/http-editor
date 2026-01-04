@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { HttpRequest, Message, SendRequestMessage, SaveRequestsMessage, ExportToCurlMessage, ImportRequestsMessage, ExecutePreAuthMessage } from '../types';
+import { HttpRequest, Message, SendRequestMessage, SaveRequestsMessage, ExportToCurlMessage, ImportRequestsMessage, ExecutePreAuthMessage, ChangeEnvironmentMessage, ChangeUserMessage, ChangeLocaleMessage } from '../types';
 import { HttpFileParser } from '../parser/httpParser';
 import { HttpClient } from '../http/httpClient';
 import { WebviewContentGenerator } from './webviewContent';
 import { CurlExporter } from '../utils/curlExporter';
 import { ImportParser } from '../utils/importParser';
+import { ConfigManager } from '../config/configManager';
 
 /**
  * Provider for managing WebView panel
@@ -18,7 +19,12 @@ export class HttpEditorWebviewProvider {
     private readonly contentGenerator: WebviewContentGenerator;
     private readonly curlExporter: CurlExporter;
     private readonly importParser: ImportParser;
+    private readonly configManager: ConfigManager;
     private fileUri: vscode.Uri | undefined;
+    private selectedEnvironment: string = '';
+    private selectedUser: string = '';
+    private selectedLocale: string = '';
+    private selectedTimezone: string = '';
 
     constructor(private readonly context: vscode.ExtensionContext) {
         this.parser = new HttpFileParser();
@@ -26,6 +32,7 @@ export class HttpEditorWebviewProvider {
         this.contentGenerator = new WebviewContentGenerator();
         this.curlExporter = new CurlExporter();
         this.importParser = new ImportParser();
+        this.configManager = new ConfigManager();
     }
 
     /**
@@ -101,14 +108,44 @@ export class HttpEditorWebviewProvider {
         }
 
         try {
+            // Load config
+            const config = await this.configManager.load();
+            
+            // Set default selections
+            if (config.defaultEnvironment) {
+                this.selectedEnvironment = config.defaultEnvironment;
+            }
+            if (config.defaultUser) {
+                this.selectedUser = config.defaultUser;
+            }
+            if (config.defaultLocale) {
+                this.selectedLocale = config.defaultLocale;
+                const localeObj = config.locales.find(l => l.locale === config.defaultLocale);
+                if (localeObj) {
+                    this.selectedTimezone = localeObj.timezone;
+                }
+            }
+            
+            // Get merged variables from config
+            const configVariables = this.configManager.getMergedVariables(
+                this.selectedEnvironment,
+                this.selectedUser
+            );
+            
+            // Set external variables for parser
+            this.parser.setExternalVariables(configVariables);
+
             // Read file content
             const fileContent = fs.readFileSync(uri.fsPath, 'utf8');
 
             // Parse requests
             const requests = this.parser.parse(fileContent);
 
+            // Set locale and timezone for httpClient
+            this.httpClient.setLocale(this.selectedLocale, this.selectedTimezone);
+
             // Generate and set HTML
-            this.panel.webview.html = this.contentGenerator.generate(requests, uri.fsPath);
+            this.panel.webview.html = this.contentGenerator.generate(requests, uri.fsPath, config);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to load file: ${error}`);
         }
@@ -133,6 +170,15 @@ export class HttpEditorWebviewProvider {
                 break;
             case 'executePreAuth':
                 await this.handleExecutePreAuth(message as ExecutePreAuthMessage);
+                break;
+            case 'changeEnvironment':
+                await this.handleChangeEnvironment(message as ChangeEnvironmentMessage);
+                break;
+            case 'changeUser':
+                await this.handleChangeUser(message as ChangeUserMessage);
+                break;
+            case 'changeLocale':
+                await this.handleChangeLocale(message as ChangeLocaleMessage);
                 break;
             case 'log':
                 console.log('[WebView]', message.text);
@@ -431,6 +477,51 @@ export class HttpEditorWebviewProvider {
         }
         
         return current !== null && current !== undefined ? String(current) : null;
+    }
+
+    /**
+     * Handles environment change
+     */
+    private async handleChangeEnvironment(message: ChangeEnvironmentMessage): Promise<void> {
+        this.selectedEnvironment = message.environment;
+        
+        // Update parser with new variables
+        const configVariables = this.configManager.getMergedVariables(
+            this.selectedEnvironment,
+            this.selectedUser
+        );
+        this.parser.setExternalVariables(configVariables);
+        
+        console.log(`Environment changed to: ${this.selectedEnvironment}`);
+    }
+
+    /**
+     * Handles user change
+     */
+    private async handleChangeUser(message: ChangeUserMessage): Promise<void> {
+        this.selectedUser = message.user;
+        
+        // Update parser with new variables
+        const configVariables = this.configManager.getMergedVariables(
+            this.selectedEnvironment,
+            this.selectedUser
+        );
+        this.parser.setExternalVariables(configVariables);
+        
+        console.log(`User changed to: ${this.selectedUser}`);
+    }
+
+    /**
+     * Handles locale change
+     */
+    private async handleChangeLocale(message: ChangeLocaleMessage): Promise<void> {
+        this.selectedLocale = message.locale;
+        this.selectedTimezone = message.timezone;
+        
+        // Update httpClient with new locale/timezone
+        this.httpClient.setLocale(this.selectedLocale, this.selectedTimezone);
+        
+        console.log(`Locale changed to: ${this.selectedLocale}, Timezone: ${this.selectedTimezone}`);
     }
 
     /**

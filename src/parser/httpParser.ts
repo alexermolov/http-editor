@@ -4,13 +4,23 @@ import { HttpRequest, HttpMethod } from "../types";
  * Parser for .http files
  */
 export class HttpFileParser {
+  private externalVariables: Record<string, string> = {};
+
+  /**
+   * Sets external variables from config (environment + user)
+   */
+  public setExternalVariables(variables: Record<string, string>): void {
+    this.externalVariables = variables;
+  }
+
   /**
    * Parses .http file content and returns array of requests
    */
   public parse(content: string): HttpRequest[] {
     const requests: HttpRequest[] = [];
     const lines = content.split("\n");
-    const globalVariables: Record<string, string> = {};
+    // Merge external variables with file variables (file variables take precedence)
+    const globalVariables: Record<string, string> = { ...this.externalVariables };
     let currentRequest: Partial<HttpRequest> | null = null;
     let inBody = false;
     let bodyLines: string[] = [];

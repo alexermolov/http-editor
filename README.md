@@ -13,12 +13,84 @@ A VS Code extension for working with `.http` files featuring a Postman-like inte
 - 🎯 **Multiple Body Types** - Support for JSON, URL-encoded, XML, HTML, JavaScript, and plain text
 - 🚀 **Send Requests** - Execute HTTP requests and view responses in real-time
 - 🔐 **Pre-Request Auth** - Automatic authentication with token extraction from auth responses
+- 🌍 **Environment Variables** - Switch between local, staging, and production environments
+- 👥 **Multiple User Profiles** - Test with different user accounts and credentials
+- 🌐 **Locale/Timezone Support** - Test APIs with different locales and timezones
 - 📊 **Response Viewer** - Inspect response status, headers, and formatted body
 - 🔤 **Variables** - Define and use variables throughout your requests
 - 📋 **cURL Export** - Export any request to cURL command (Windows/Unix compatible)
 - 📥 **Import** - Import Postman collections and cURL commands
 - 💾 **Auto-save** - Save your changes back to the `.http` file
 - 🎨 **VS Code Themes** - Seamlessly integrates with your editor theme
+
+## Quick Start
+
+### 1. Create Configuration File
+
+Run the command palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and select:
+```
+HTTP Editor: Create Example Config File
+```
+
+This creates `.http-editor.config.json` in your workspace root with example configuration.
+
+### 2. Configure Environments and Users
+
+Edit `.http-editor.config.json`:
+
+```json
+{
+  "environments": [
+    {
+      "name": "local",
+      "variables": {
+        "host": "localhost:3000",
+        "protocol": "http"
+      }
+    },
+    {
+      "name": "production",
+      "variables": {
+        "host": "api.mydomain.com",
+        "protocol": "https"
+      }
+    }
+  ],
+  "users": [
+    {
+      "name": "admin",
+      "token": "Bearer admin-token-here",
+      "variables": {
+        "role": "admin"
+      }
+    }
+  ],
+  "locales": [
+    {
+      "locale": "en-US",
+      "timezone": "America/New_York"
+    }
+  ]
+}
+```
+
+### 3. Use Variables in .http Files
+
+```http
+### Get Users
+GET {{protocol}}://{{host}}/api/users
+Authorization: {{token}}
+Accept: application/json
+```
+
+### 4. Switch Environments/Users/Locales
+
+Use the dropdown selectors at the top of the sidebar to switch between:
+- **Environment** (local, staging, production)
+- **User** (admin, testUser, etc.)
+- **Locale/Timezone** (en-US, ja-JP, etc.)
+
+For detailed documentation, see [FEATURES.md](FEATURES.md).
 
 ## Usage
 
