@@ -5,6 +5,12 @@ All notable changes to the "HTTP Request Editor" extension will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Variables tab now automatically regenerates when Environment, User, or Locale is changed
+- Config variables are now properly merged with request variables and displayed in the Variables tab
+
 ## [1.0.0] - 2025-11-18
 
 ### Added

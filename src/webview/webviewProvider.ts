@@ -521,6 +521,14 @@ export class HttpEditorWebviewProvider {
         this.parser.setExternalVariables(configVariables);
         
         logger.debug(`Environment changed to: ${this.selectedEnvironment}`);
+        
+        // Send updated variables to webview
+        if (this.panel) {
+            this.panel.webview.postMessage({
+                command: 'updateVariables',
+                variables: configVariables
+            });
+        }
     }
 
     /**
@@ -537,6 +545,14 @@ export class HttpEditorWebviewProvider {
         this.parser.setExternalVariables(configVariables);
         
         logger.debug(`User changed to: ${this.selectedUser}`);
+        
+        // Send updated variables to webview
+        if (this.panel) {
+            this.panel.webview.postMessage({
+                command: 'updateVariables',
+                variables: configVariables
+            });
+        }
     }
 
     /**
@@ -550,6 +566,18 @@ export class HttpEditorWebviewProvider {
         this.httpClient.setLocale(this.selectedLocale, this.selectedTimezone);
         
         logger.debug(`Locale changed to: ${this.selectedLocale}, Timezone: ${this.selectedTimezone}`);
+        
+        // Send updated variables to webview (for consistency, in case locale affects variables)
+        if (this.panel) {
+            const configVariables = this.configManager.getMergedVariables(
+                this.selectedEnvironment,
+                this.selectedUser
+            );
+            this.panel.webview.postMessage({
+                command: 'updateVariables',
+                variables: configVariables
+            });
+        }
     }
 
     /**

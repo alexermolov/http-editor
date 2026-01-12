@@ -2329,8 +2329,29 @@ export class WebviewContentGenerator {
                         }, 2000);
                     }
                     break;
+                case 'updateVariables':
+                    handleVariablesUpdate(message.variables);
+                    break;
             }
         });
+
+        // Handle variables update from extension
+        function handleVariablesUpdate(newVariables) {
+            // Update current request's variables
+            if (currentRequestId !== null) {
+                const request = requests.find(r => r.id === currentRequestId);
+                if (request) {
+                    // Merge new variables with existing ones
+                    request.variables = {
+                        ...newVariables,
+                        ...(request.variables || {})
+                    };
+                    
+                    // Re-render variables tab
+                    renderVariables(request.variables);
+                }
+            }
+        }
 
         // Handle request complete
         function handleRequestComplete(response) {
