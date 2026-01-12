@@ -8,6 +8,7 @@ import { WebviewContentGenerator } from './webviewContent';
 import { CurlExporter } from '../utils/curlExporter';
 import { ImportParser } from '../utils/importParser';
 import { ConfigManager } from '../config/configManager';
+import { logger } from '../utils/logger';
 
 /**
  * Provider for managing WebView panel
@@ -40,7 +41,7 @@ export class HttpEditorWebviewProvider {
      */
     public async openEditor(uri: vscode.Uri): Promise<void> {
         try {
-            console.log('HTTP Editor: Opening editor for', uri.fsPath);
+            logger.debug('Opening editor for', uri.fsPath);
             
             // Check file extension
             if (!uri.fsPath.endsWith('.http')) {
@@ -52,19 +53,19 @@ export class HttpEditorWebviewProvider {
 
             // Создаем или показываем WebView панель
             if (this.panel) {
-                console.log('HTTP Editor: Revealing existing panel');
+                logger.debug('Revealing existing panel');
                 this.panel.reveal(vscode.ViewColumn.One);
             } else {
-                console.log('HTTP Editor: Creating new panel');
+                logger.debug('Creating new panel');
                 this.createWebviewPanel(uri);
             }
 
             // Загружаем и отображаем содержимое
-            console.log('HTTP Editor: Loading content');
+            logger.debug('Loading content');
             await this.loadAndDisplayContent(uri);
-            console.log('HTTP Editor: Editor opened successfully');
+            logger.debug('Editor opened successfully');
         } catch (error) {
-            console.error('HTTP Editor: Error in openEditor', error);
+            logger.error('Error in openEditor', error);
             throw error;
         }
     }
@@ -181,7 +182,7 @@ export class HttpEditorWebviewProvider {
                 await this.handleChangeLocale(message as ChangeLocaleMessage);
                 break;
             case 'log':
-                console.log('[WebView]', message.text);
+                logger.debug('[WebView]', message.text);
                 break;
         }
     }
@@ -363,7 +364,7 @@ export class HttpEditorWebviewProvider {
         try {
             const preAuth = message.preAuth;
             
-            console.log('Pre-auth: Starting with config:', {
+            logger.debug('Pre-auth: Starting with config:', {
                 hasCurlCommand: !!preAuth.curlCommand,
                 hasUsername: !!preAuth.username,
                 hasPassword: !!preAuth.password,
@@ -381,11 +382,15 @@ export class HttpEditorWebviewProvider {
             const username = preAuth.username || (usernameVar && usernameVar.trim() ? usernameVar : '');
             const password = preAuth.password || (passwordVar && passwordVar.trim() ? passwordVar : '');
             
-            if (username) {
-                curlCommand = curlCommand.replace(/\{\{username\}\}/g, username);
+            // Sanitize credentials to prevent command injection
+            const sanitizedUsername = this.sanitizeShellValue(username);
+            const sanitizedPassword = this.sanitizeShellValue(password);
+            
+            if (sanitizedUsername) {
+                curlCommand = curlCommand.replace(/\{\{username\}\}/g, sanitizedUsername);
             }
-            if (password) {
-                curlCommand = curlCommand.replace(/\{\{password\}\}/g, password);
+            if (sanitizedPassword) {
+                curlCommand = curlCommand.replace(/\{\{password\}\}/g, sanitizedPassword);
             }
             
             // Replace OTHER variables from request context (excluding username and password)
@@ -397,18 +402,19 @@ export class HttpEditorWebviewProvider {
                     }
                     // Only replace if value is not empty
                     if (value && value.trim()) {
-                        const pattern = new RegExp(`\\{\\{\\s*${name}\\s*\\}\\}`, 'g');
-                        curlCommand = curlCommand.replace(pattern, value);
+                        const sanitizedValue = this.sanitizeShellValue(value);
+                        const pattern = new RegExp(`\\{\\{\\s*${this.escapeRegex(name)}\\s*\\}\\}`, 'g');
+                        curlCommand = curlCommand.replace(pattern, sanitizedValue);
                     }
                 });
             }
             
-            console.log('Pre-auth: Final cURL command after variable substitution:', curlCommand);
+            logger.debug('Pre-auth: Final cURL command after variable substitution:', curlCommand);
             
             // Parse cURL to HttpRequest
             const authRequest = this.importParser.parseCurl(curlCommand);
             
-            console.log('Pre-auth: Parsed auth request:', {
+            logger.debug('Pre-auth: Parsed auth request:', {
                 method: authRequest.method,
                 url: authRequest.url,
                 headers: authRequest.headers,
@@ -417,12 +423,12 @@ export class HttpEditorWebviewProvider {
                 bodyType: authRequest.bodyType
             });
             
-            console.log('Pre-auth: Full auth request details:', JSON.stringify(authRequest, null, 2));
+            logger.debug('Pre-auth: Full auth request details:', JSON.stringify(authRequest, null, 2));
             
             // Execute the auth request
             const response = await this.httpClient.send(authRequest);
             
-            console.log('Pre-auth: Got response:', {
+            logger.debug('Pre-auth: Got response:', {
                 status: response.status,
                 statusText: response.statusText,
                 isError: response.isError
@@ -455,6 +461,28 @@ export class HttpEditorWebviewProvider {
                 error: errorMessage
             });
         }
+    }
+
+    /**
+     * Sanitizes shell values to prevent command injection
+     */
+    private sanitizeShellValue(value: string): string {
+        if (!value) return '';
+        
+        // Remove or escape potentially dangerous characters
+        // Allow only alphanumeric, common symbols, and escape special shell characters
+        return value
+            .replace(/[`$(){}[\]|&;<>\n\r]/g, '') // Remove dangerous shell characters
+            .replace(/\\/g, '\\\\') // Escape backslashes
+            .replace(/"/g, '\\"') // Escape double quotes
+            .replace(/'/g, "'\\\''"); // Escape single quotes for shell
+    }
+    
+    /**
+     * Escapes special regex characters in a string
+     */
+    private escapeRegex(str: string): string {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     /**
@@ -492,7 +520,7 @@ export class HttpEditorWebviewProvider {
         );
         this.parser.setExternalVariables(configVariables);
         
-        console.log(`Environment changed to: ${this.selectedEnvironment}`);
+        logger.debug(`Environment changed to: ${this.selectedEnvironment}`);
     }
 
     /**
@@ -508,7 +536,7 @@ export class HttpEditorWebviewProvider {
         );
         this.parser.setExternalVariables(configVariables);
         
-        console.log(`User changed to: ${this.selectedUser}`);
+        logger.debug(`User changed to: ${this.selectedUser}`);
     }
 
     /**
@@ -521,7 +549,7 @@ export class HttpEditorWebviewProvider {
         // Update httpClient with new locale/timezone
         this.httpClient.setLocale(this.selectedLocale, this.selectedTimezone);
         
-        console.log(`Locale changed to: ${this.selectedLocale}, Timezone: ${this.selectedTimezone}`);
+        logger.debug(`Locale changed to: ${this.selectedLocale}, Timezone: ${this.selectedTimezone}`);
     }
 
     /**

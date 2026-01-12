@@ -19,7 +19,7 @@ export class HttpFileParser {
   public parse(content: string): HttpRequest[] {
     const requests: HttpRequest[] = [];
     const lines = content.split("\n");
-    // Merge external variables with file variables (file variables take precedence)
+    // Start with external variables (config), file variables will override them later if defined
     const globalVariables: Record<string, string> = { ...this.externalVariables };
     let currentRequest: Partial<HttpRequest> | null = null;
     let inBody = false;
@@ -214,9 +214,9 @@ export class HttpFileParser {
     const variables: string[] = [];
     let tempStr = str;
     
-    // Extract and store variable templates
-    let match;
-    while ((match = variablePattern.exec(str)) !== null) {
+    // Extract and store variable templates using matchAll (safer than exec in loop)
+    const matches = str.matchAll(variablePattern);
+    for (const match of matches) {
       variables.push(match[0]);
     }
     

@@ -49,7 +49,7 @@ export class ImportParser {
    * Parse import content (auto-detect format)
    */
   public parse(content: string): HttpRequest[] {
-    this.requestCounter = 0;
+    this.requestCounter = 0; // Reset counter for each parse call
     const trimmed = content.trim();
 
     // Try to detect format

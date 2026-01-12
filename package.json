@@ -2,7 +2,7 @@
   "name": "http-editor",
   "displayName": "HTTP Request Editor",
   "description": "Advanced HTTP request editor with Postman-like interface for .http files",
-  "version": "1.5.0",
+  "version": "1.5.2",
   "publisher": "alexermolov",
   "author": {
     "name": "Alex Ermolov"
@@ -38,10 +38,7 @@
     "Testing",
     "Other"
   ],
-  "activationEvents": [
-    "onStartupFinished",
-    "workspaceContains:*.http"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -101,7 +98,7 @@
     "publish": "vsce publish"
   },
   "dependencies": {
-    "axios": "^1.6.0",
+    "axios": "^1.13.2",
     "highlight.js": "^11.11.1",
     "parse-curl": "^0.2.6"
   },

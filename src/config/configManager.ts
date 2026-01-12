@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { ExtensionConfig, Environment, UserProfile, LocaleSettings } from '../types';
+import { logger } from '../utils/logger';
 
 /**
  * Configuration file name
@@ -49,7 +50,7 @@ export class ConfigManager {
         try {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders || workspaceFolders.length === 0) {
-                console.log('No workspace folder found, using default config');
+                logger.debug('No workspace folder found, using default config');
                 return this.config;
             }
 
@@ -61,13 +62,13 @@ export class ConfigManager {
                 const content = fs.readFileSync(configPath, 'utf8');
                 this.config = JSON.parse(content);
                 this.configFilePath = configPath;
-                console.log('Loaded config from:', configPath);
+                logger.info('Loaded config from:', configPath);
             } else {
-                console.log('Config file not found, using default config');
+                logger.debug('Config file not found, using default config');
                 this.config = DEFAULT_CONFIG;
             }
         } catch (error) {
-            console.error('Failed to load config:', error);
+            logger.error('Failed to load config:', error);
             vscode.window.showWarningMessage('Failed to load configuration, using defaults');
             this.config = DEFAULT_CONFIG;
         }
@@ -94,9 +95,9 @@ export class ConfigManager {
             this.config = config;
             this.configFilePath = configPath;
             
-            console.log('Saved config to:', configPath);
+            logger.info('Saved config to:', configPath);
         } catch (error) {
-            console.error('Failed to save config:', error);
+            logger.error('Failed to save config:', error);
             throw error;
         }
     }
@@ -276,7 +277,7 @@ export class ConfigManager {
             const doc = await vscode.workspace.openTextDocument(configPath);
             await vscode.window.showTextDocument(doc);
         } catch (error) {
-            console.error('Failed to create example config:', error);
+            logger.error('Failed to create example config:', error);
             vscode.window.showErrorMessage('Failed to create example config file');
         }
     }

@@ -1,16 +1,28 @@
 import * as vscode from 'vscode';
 import { HttpEditorWebviewProvider } from './webview/webviewProvider';
 import { ConfigManager } from './config/configManager';
+import { logger } from './utils/logger';
 
 /**
  * Extension activation
  */
 export function activate(context: vscode.ExtensionContext): void {
     try {
+        // Suppress navigator deprecation warning from axios
+        // This is a known issue with axios in VS Code extensions
+        // See: https://aka.ms/vscode-extensions/navigator
+        const originalEmit = process.emit;
+        process.emit = function(event: any, ...args: any[]) {
+            if (event === 'warning' && args[0]?.name === 'PendingMigrationError') {
+                return false;
+            }
+            return originalEmit.apply(process, [event, ...args] as any);
+        } as any;
+
         // Disable SSL certificate verification globally to handle proxy issues
         process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
         
-        console.log('HTTP Editor extension is activating...');
+        logger.info('Extension is activating...');
         
         const webviewProvider = new HttpEditorWebviewProvider(context);
         const configManager = new ConfigManager();
@@ -20,7 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
             'httpEditor.openEditor',
             async (uri?: vscode.Uri) => {
                 try {
-                    console.log('HTTP Editor: openEditor command invoked', uri?.fsPath);
+                    logger.debug('openEditor command invoked', uri?.fsPath);
                     
                     // If URI not provided, use active editor
                     if (!uri) {
@@ -35,7 +47,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
                     await webviewProvider.openEditor(uri);
                 } catch (error) {
-                    console.error('HTTP Editor: Error in openEditor command', error);
+                    logger.error('Error in openEditor command', error);
                     vscode.window.showErrorMessage(`Failed to open HTTP Editor: ${error}`);
                 }
             }
@@ -48,7 +60,7 @@ export function activate(context: vscode.ExtensionContext): void {
                 try {
                     await configManager.createExampleConfig();
                 } catch (error) {
-                    console.error('HTTP Editor: Error creating config', error);
+                    logger.error('Error creating config', error);
                     vscode.window.showErrorMessage(`Failed to create config: ${error}`);
                 }
             }
@@ -58,10 +70,9 @@ export function activate(context: vscode.ExtensionContext): void {
         context.subscriptions.push(createConfigCommand);
         context.subscriptions.push(webviewProvider);
         
-        console.log('HTTP Editor extension is now active');
-        vscode.window.showInformationMessage('HTTP Editor extension activated successfully!');
+        logger.info('Extension is now active');
     } catch (error) {
-        console.error('HTTP Editor: Error during activation', error);
+        logger.error('Error during activation', error);
         vscode.window.showErrorMessage(`Failed to activate HTTP Editor: ${error}`);
     }
 }
@@ -70,5 +81,5 @@ export function activate(context: vscode.ExtensionContext): void {
  * Extension deactivation
  */
 export function deactivate(): void {
-    console.log('HTTP Editor extension is now deactivated');
+    logger.info('Extension is now deactivated');
 }
