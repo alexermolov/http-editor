@@ -2337,18 +2337,22 @@ export class WebviewContentGenerator {
 
         // Handle variables update from extension
         function handleVariablesUpdate(newVariables) {
-            // Update current request's variables
+            const incoming = newVariables || {};
+            
+            // Apply new config variables to every request, letting incoming values override old ones
+            requests.forEach(req => {
+                const existing = req.variables || {};
+                req.variables = {
+                    ...existing,
+                    ...incoming
+                };
+            });
+
+            // Re-render the active request so the Variables tab reflects the change immediately
             if (currentRequestId !== null) {
                 const request = requests.find(r => r.id === currentRequestId);
                 if (request) {
-                    // Merge new variables with existing ones
-                    request.variables = {
-                        ...newVariables,
-                        ...(request.variables || {})
-                    };
-                    
-                    // Re-render variables tab
-                    renderVariables(request.variables);
+                    renderVariables(request.variables || {});
                 }
             }
         }
