@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { HttpRequest, Message, SendRequestMessage, SaveRequestsMessage, ExportToCurlMessage, ImportRequestsMessage, ExecutePreAuthMessage, ChangeEnvironmentMessage, ChangeUserMessage, ChangeLocaleMessage } from '../types';
+import { HttpRequest, Message, SendRequestMessage, SaveRequestsMessage, ExportToCurlMessage, ImportRequestsMessage, ExecutePreAuthMessage, ChangeEnvironmentMessage, ChangeUserMessage, ChangeLocaleMessage, ExtensionConfig, UserProfile } from '../types';
 import { HttpFileParser } from '../parser/httpParser';
 import { HttpClient } from '../http/httpClient';
 import { WebviewContentGenerator } from './webviewContent';
@@ -111,14 +111,13 @@ export class HttpEditorWebviewProvider {
         try {
             // Load config
             const config = await this.configManager.load();
-            
-            // Set default selections
-            if (config.defaultEnvironment) {
-                this.selectedEnvironment = config.defaultEnvironment;
-            }
-            if (config.defaultUser) {
-                this.selectedUser = config.defaultUser;
-            }
+
+            // Initialize selections
+            this.selectedEnvironment = '';
+            this.selectedUser = '';
+            this.selectedLocale = '';
+            this.selectedTimezone = '';
+
             if (config.defaultLocale) {
                 this.selectedLocale = config.defaultLocale;
                 const localeObj = config.locales.find(l => l.locale === config.defaultLocale);
@@ -126,18 +125,24 @@ export class HttpEditorWebviewProvider {
                     this.selectedTimezone = localeObj.timezone;
                 }
             }
-            
-            // Get merged variables from config
+
+            // Read file content early to analyze variables
+            const fileContent = fs.readFileSync(uri.fsPath, 'utf8');
+            const fileVariables = this.parser.extractGlobalVariables(fileContent);
+
+            // Detect matching environment and user based on variable overlap
+            this.selectedEnvironment = this.detectEnvironmentFromFileVariables(fileVariables, config);
+            this.selectedUser = this.detectUserFromFileVariables(fileVariables, config);
+
+            // Get merged variables from config without falling back to defaults when no match
             const configVariables = this.configManager.getMergedVariables(
                 this.selectedEnvironment,
-                this.selectedUser
+                this.selectedUser,
+                false
             );
             
             // Set external variables for parser
             this.parser.setExternalVariables(configVariables);
-
-            // Read file content
-            const fileContent = fs.readFileSync(uri.fsPath, 'utf8');
 
             // Parse requests
             const requests = this.parser.parse(fileContent);
@@ -145,8 +150,15 @@ export class HttpEditorWebviewProvider {
             // Set locale and timezone for httpClient
             this.httpClient.setLocale(this.selectedLocale, this.selectedTimezone);
 
+            // Override defaults shown in UI to reflect detected selections (or empty when no match)
+            const effectiveConfig: ExtensionConfig = {
+                ...config,
+                defaultEnvironment: this.selectedEnvironment || undefined,
+                defaultUser: this.selectedUser || undefined
+            };
+
             // Generate and set HTML
-            this.panel.webview.html = this.contentGenerator.generate(requests, uri.fsPath, config);
+            this.panel.webview.html = this.contentGenerator.generate(requests, uri.fsPath, effectiveConfig);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to load file: ${error}`);
         }
@@ -516,7 +528,8 @@ export class HttpEditorWebviewProvider {
         // Update parser with new variables
         const configVariables = this.configManager.getMergedVariables(
             this.selectedEnvironment,
-            this.selectedUser
+            this.selectedUser,
+            false
         );
         this.parser.setExternalVariables(configVariables);
         
@@ -540,7 +553,8 @@ export class HttpEditorWebviewProvider {
         // Update parser with new variables
         const configVariables = this.configManager.getMergedVariables(
             this.selectedEnvironment,
-            this.selectedUser
+            this.selectedUser,
+            false
         );
         this.parser.setExternalVariables(configVariables);
         
@@ -571,7 +585,8 @@ export class HttpEditorWebviewProvider {
         if (this.panel) {
             const configVariables = this.configManager.getMergedVariables(
                 this.selectedEnvironment,
-                this.selectedUser
+                this.selectedUser,
+                false
             );
             this.panel.webview.postMessage({
                 command: 'updateVariables',
@@ -587,5 +602,90 @@ export class HttpEditorWebviewProvider {
         if (this.panel) {
             this.panel.dispose();
         }
+    }
+
+    /**
+     * Detects environment whose variables best match those declared in the .http file
+     */
+    private detectEnvironmentFromFileVariables(fileVariables: Record<string, string>, config: ExtensionConfig): string {
+        if (!config.environments || config.environments.length === 0) {
+            return '';
+        }
+
+        let bestMatch = '';
+        let bestScore = 0;
+
+        for (const env of config.environments) {
+            const { matches, conflicts } = this.calculateMatchScore(env.variables, fileVariables);
+            if (!conflicts && matches > 0 && matches > bestScore) {
+                bestMatch = env.name;
+                bestScore = matches;
+            }
+        }
+
+        return bestMatch;
+    }
+
+    /**
+     * Detects user profile whose variables best match those declared in the .http file
+     */
+    private detectUserFromFileVariables(fileVariables: Record<string, string>, config: ExtensionConfig): string {
+        if (!config.users || config.users.length === 0) {
+            return '';
+        }
+
+        let bestMatch = '';
+        let bestScore = 0;
+
+        for (const user of config.users) {
+            const userVars = this.flattenUserVariables(user);
+            const { matches, conflicts } = this.calculateMatchScore(userVars, fileVariables);
+            if (!conflicts && matches > 0 && matches > bestScore) {
+                bestMatch = user.name;
+                bestScore = matches;
+            }
+        }
+
+        return bestMatch;
+    }
+
+    /**
+     * Calculates how many variables match exactly and whether any conflicts exist
+     */
+    private calculateMatchScore(target: Record<string, string>, fileVariables: Record<string, string>): { matches: number; conflicts: boolean } {
+        let matches = 0;
+        let conflicts = false;
+
+        Object.entries(target || {}).forEach(([key, value]) => {
+            if (!value) {
+                return;
+            }
+
+            if (key in fileVariables) {
+                if (fileVariables[key] === value) {
+                    matches += 1;
+                } else {
+                    conflicts = true;
+                }
+            }
+        });
+
+        return { matches, conflicts };
+    }
+
+    /**
+     * Normalizes user profile into a flat variable map for comparison
+     */
+    private flattenUserVariables(user: UserProfile): Record<string, string> {
+        const vars: Record<string, string> = {};
+
+        if (user.username) vars.username = user.username;
+        if (user.password) vars.password = user.password;
+        if (user.token) vars.token = user.token;
+        if (user.variables) {
+            Object.assign(vars, user.variables);
+        }
+
+        return vars;
     }
 }

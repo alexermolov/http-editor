@@ -133,35 +133,20 @@ export class ConfigManager {
     /**
      * Gets merged variables from environment and user
      */
-    public getMergedVariables(environmentName?: string, userName?: string): Record<string, string> {
+    public getMergedVariables(environmentName?: string, userName?: string, useDefaults: boolean = true): Record<string, string> {
         const variables: Record<string, string> = {};
 
-        // Add environment variables
-        if (environmentName) {
-            const environment = this.getEnvironment(environmentName);
-            if (environment) {
-                Object.assign(variables, environment.variables);
-            }
-        } else if (this.config.defaultEnvironment) {
-            const environment = this.getEnvironment(this.config.defaultEnvironment);
+        const resolvedEnvironment = environmentName || (useDefaults ? this.config.defaultEnvironment : undefined);
+        if (resolvedEnvironment) {
+            const environment = this.getEnvironment(resolvedEnvironment);
             if (environment) {
                 Object.assign(variables, environment.variables);
             }
         }
 
-        // Add user variables (overrides environment variables)
-        if (userName) {
-            const user = this.getUser(userName);
-            if (user) {
-                if (user.username) variables.username = user.username;
-                if (user.password) variables.password = user.password;
-                if (user.token) variables.token = user.token;
-                if (user.variables) {
-                    Object.assign(variables, user.variables);
-                }
-            }
-        } else if (this.config.defaultUser) {
-            const user = this.getUser(this.config.defaultUser);
+        const resolvedUser = userName || (useDefaults ? this.config.defaultUser : undefined);
+        if (resolvedUser) {
+            const user = this.getUser(resolvedUser);
             if (user) {
                 if (user.username) variables.username = user.username;
                 if (user.password) variables.password = user.password;

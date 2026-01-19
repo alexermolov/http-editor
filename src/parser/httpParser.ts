@@ -14,6 +14,27 @@ export class HttpFileParser {
   }
 
   /**
+   * Extracts global variable declarations from .http content without merging config
+   */
+  public extractGlobalVariables(content: string): Record<string, string> {
+    const variables: Record<string, string> = {};
+    const lines = content.split("\n");
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+
+      if (line.startsWith("@") && line.includes("=")) {
+        const { name, value } = this.parseVariable(line);
+        if (name && value !== undefined) {
+          variables[name] = value;
+        }
+      }
+    }
+
+    return variables;
+  }
+
+  /**
    * Parses .http file content and returns array of requests
    */
   public parse(content: string): HttpRequest[] {
