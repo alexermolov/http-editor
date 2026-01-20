@@ -205,7 +205,17 @@ function selectRequest(id) {
   document.getElementById("requestName").value = request.name;
   document.getElementById("methodSelect").value = request.method;
   document.getElementById("bodyInput").value = request.body || "";
-  document.getElementById("bodyTypeSelect").value = request.bodyType || "text";
+
+  // Prefer Content-Type based detection so the dropdown matches headers automatically.
+  // (Parser also detects bodyType, but older parsed requests may have defaulted to 'text')
+  const detectedFromHeaders = detectBodyTypeFromHeaders(request.headers);
+  const resolvedBodyType =
+    detectedFromHeaders && detectedFromHeaders !== "text"
+      ? detectedFromHeaders
+      : request.bodyType || "text";
+
+  request.bodyType = resolvedBodyType;
+  document.getElementById("bodyTypeSelect").value = resolvedBodyType;
   updateBodyHighlight();
   syncBodyScroll();
 
@@ -955,6 +965,33 @@ function onUrlChange() {
 }
 
 // Update request body type
+// Detect body type from Content-Type header
+function detectBodyTypeFromHeaders(headers) {
+  const contentTypeKey = Object.keys(headers || {}).find(
+    (key) => key.toLowerCase() === "content-type"
+  );
+
+  if (!contentTypeKey) {
+    return "text";
+  }
+
+  const contentType = headers[contentTypeKey].toLowerCase();
+
+  if (contentType.includes("application/json")) {
+    return "json";
+  } else if (contentType.includes("application/x-www-form-urlencoded")) {
+    return "urlencoded";
+  } else if (contentType.includes("application/xml") || contentType.includes("text/xml")) {
+    return "xml";
+  } else if (contentType.includes("text/html")) {
+    return "html";
+  } else if (contentType.includes("application/javascript") || contentType.includes("text/javascript")) {
+    return "javascript";
+  }
+
+  return "text";
+}
+
 function updateBodyType() {
   const request = requests.find((r) => r.id === currentRequestId);
   if (!request) return;

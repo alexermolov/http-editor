@@ -754,6 +754,9 @@ pre code.hljs {
   position: relative;
   width: 100%;
   height: 300px;
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
 }
 
 .body-highlight-layer {
@@ -773,35 +776,45 @@ pre code.hljs {
   font-family: "Consolas", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.5;
-  color: transparent;
   background: transparent;
+  z-index: 0;
 }
 
 .body-highlight-layer code {
   white-space: pre-wrap;
   word-wrap: break-word;
+  display: block;
 }
 
 .body-editor-container #bodyInput {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   margin: 0;
   padding: 12px;
-  border: 1px solid var(--vscode-input-border);
+  border: none;
   background-color: transparent;
-  color: var(--vscode-input-foreground);
+  color: transparent;
+  caret-color: var(--vscode-editorCursor-foreground, #fff);
   font-family: "Consolas", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.5;
   border-radius: 4px;
   resize: vertical;
   z-index: 1;
+  outline: none;
 }
 
-.body-editor-container #bodyInput:focus {
+.body-editor-container #bodyInput::selection {
+  background-color: var(--vscode-editor-selectionBackground, rgba(255, 255, 255, 0.2));
+  color: var(--vscode-editor-selectionForeground, #fff);
+}
+
+.body-editor-container:focus-within {
   outline: 1px solid var(--vscode-focusBorder);
-  background-color: transparent;
+  outline-offset: -1px;
 }
 
 /* URL-encoded body highlighting */

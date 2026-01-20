@@ -76,6 +76,8 @@ export class HttpFileParser {
             if (bodyLines.length > 0) {
               currentRequest.body = bodyLines.join("\n");
             }
+            // Detect body type for the completed request before finalizing
+            currentRequest.bodyType = this.detectBodyType(currentRequest);
             requests.push(
               this.finalizeRequest(currentRequest, globalVariables)
             );
