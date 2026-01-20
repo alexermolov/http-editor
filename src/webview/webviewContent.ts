@@ -36,6 +36,8 @@ export class WebviewContentGenerator {
         ${stylesUri ? `<link rel="stylesheet" href="${stylesUri}">` : ""}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -125,8 +127,7 @@ export class WebviewContentGenerator {
                         <option value="OPTIONS">OPTIONS</option>
                     </select>
                     <div class="url-input-wrapper">
-                        <input type="text" id="urlInput" placeholder="https://api.example.com/endpoint" onchange="onUrlChange()" oninput="updateUrlPreview()">
-                        <div class="url-preview" id="urlPreview"></div>
+                        <input type="text" id="urlInput" placeholder="https://api.example.com/endpoint" onchange="onUrlChange()">
                     </div>
                 </div>
                 <button class="btn-export" onclick="exportToCurl()" title="Export to cURL">📋 cURL</button>
@@ -165,7 +166,10 @@ export class WebviewContentGenerator {
                                 <option value="javascript">JavaScript</option>
                             </select>
                         </div>
-                        <textarea id="bodyInput" placeholder="Enter request body" onchange="updateCurrentRequest()"></textarea>
+                        <div class="body-editor-container">
+                            <pre class="body-highlight-layer"><code id="bodyHighlight" class="hljs"></code></pre>
+                            <textarea id="bodyInput" placeholder="Enter request body" oninput="updateCurrentRequest(); updateBodyHighlight()" onscroll="syncBodyScroll()"></textarea>
+                        </div>
                     </div>
                 </div>
 

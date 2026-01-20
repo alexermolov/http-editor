@@ -49,16 +49,10 @@ function init() {
   const bodyInput = document.getElementById("bodyInput");
   if (bodyInput) {
     bodyInput.addEventListener("scroll", syncBodyScroll);
-  }
-
-  const urlInput = document.getElementById("urlInput");
-  if (urlInput) {
-    // Keep the variable highlight overlay aligned with the real input scroll.
-    urlInput.addEventListener("scroll", syncUrlPreviewScroll);
-    urlInput.addEventListener("input", syncUrlPreviewScroll);
-    urlInput.addEventListener("keyup", syncUrlPreviewScroll);
-    urlInput.addEventListener("click", syncUrlPreviewScroll);
-    urlInput.addEventListener("focus", syncUrlPreviewScroll);
+    bodyInput.addEventListener("input", function() {
+      updateCurrentRequest();
+      updateBodyHighlight();
+    });
   }
 }
 
@@ -255,10 +249,6 @@ function selectRequest(id) {
   if (globalPreAuthConfig.enabled && !globalPreAuthConfig.curlCommand) {
     autoPopulateFromPreAuthRequest();
   }
-
-  // Update URL preview
-  updateUrlPreview();
-  syncUrlPreviewScroll();
 
   // Update list
   renderRequestList();
@@ -927,7 +917,7 @@ function formatBodyIfNeeded() {
 
 function syncBodyScroll() {
   const bodyInput = document.getElementById("bodyInput");
-  const highlightContainer = document.querySelector(".body-highlight");
+  const highlightContainer = document.querySelector(".body-highlight-layer");
   if (!bodyInput || !highlightContainer) {
     return;
   }
