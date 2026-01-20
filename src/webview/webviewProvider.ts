@@ -81,7 +81,7 @@ export class HttpEditorWebviewProvider {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
-                localResourceRoots: []
+                localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')]
             }
         );
 
@@ -157,8 +157,25 @@ export class HttpEditorWebviewProvider {
                 defaultUser: this.selectedUser || undefined
             };
 
+            const webview = this.panel.webview;
+            const stylesUri = webview.asWebviewUri(
+                vscode.Uri.joinPath(this.context.extensionUri, 'media', 'webview.css')
+            );
+            const scriptUri = webview.asWebviewUri(
+                vscode.Uri.joinPath(this.context.extensionUri, 'media', 'webview.js')
+            );
+
             // Generate and set HTML
-            this.panel.webview.html = this.contentGenerator.generate(requests, uri.fsPath, effectiveConfig);
+            this.panel.webview.html = this.contentGenerator.generate(
+                requests,
+                uri.fsPath,
+                effectiveConfig,
+                {
+                    stylesUri: stylesUri.toString(),
+                    scriptUri: scriptUri.toString(),
+                    cspSource: webview.cspSource
+                }
+            );
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to load file: ${error}`);
         }
